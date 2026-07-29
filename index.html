@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -139,6 +140,17 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 .check-inline{font-weight:400;display:inline-flex;gap:5px;margin:0 14px 6px 0;align-items:center}
 .check-inline input{width:auto}
 
+/* fields manager */
+.field-row{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)}
+.field-row .fr-move{display:flex;flex-direction:column;gap:3px}
+.field-row .fr-move .btn{padding:1px 7px;font-size:12px}
+.field-row .fr-main{flex:1;display:flex;gap:8px;flex-wrap:wrap}
+.field-row .fr-label{flex:1;min-width:130px}
+.field-row .fr-label[readonly]{background:#F3F0E7;color:var(--ink-soft)}
+.field-row .fr-type{width:auto}
+.field-row .fr-options{flex-basis:100%}
+.field-row .btn-danger{align-self:center}
+
 /* ---------- print ---------- */
 #printArea{display:none}
 @media print{
@@ -189,6 +201,8 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       <div class="spacer"></div>
       <button class="btn btn-sm" id="printOpenBtn">🖨 Print</button>
       <button class="btn btn-sm btn-gold" id="addBtn" hidden>＋ Add Member</button>
+      <button class="btn btn-sm" id="importBtn" hidden>⬆ Import</button>
+      <button class="btn btn-sm" id="fieldsBtn" hidden>⚙ Fields</button>
       <button class="btn btn-sm" id="accountBtn" hidden>👤 Accounts</button>
       <button class="btn btn-sm" id="logoutBtn">Log out</button>
     </div>
@@ -318,6 +332,65 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
   </div>
 </div>
 
+<!-- ===================== Fields manager ===================== -->
+<div class="overlay" id="fieldsOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:560px">
+    <div class="modal-head">
+      <h2>Manage Fields</h2>
+      <button class="x-btn" data-close="fieldsOverlay" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="margin-bottom:10px">
+        Changes apply to the form, detail view, and print settings for everyone.
+        Removing a field hides it but keeps existing data. For dropdowns, edit the options list (comma-separated).
+      </p>
+      <div id="fieldRows"></div>
+      <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap">
+        <input id="newFieldLabel" placeholder="New field name (e.g. Occupation)" style="flex:1;min-width:160px">
+        <select id="newFieldType" style="width:auto">
+          <option value="text">Text</option>
+          <option value="select">Dropdown</option>
+          <option value="date">Date</option>
+          <option value="tel">Phone</option>
+          <option value="email">Email</option>
+          <option value="textarea">Long text</option>
+        </select>
+        <button class="btn" id="fieldAddBtn" type="button">＋ Add</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="fieldsOverlay">Cancel</button>
+      <button class="btn btn-primary" id="fieldsSaveBtn">Save fields</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Import ===================== -->
+<div class="overlay" id="importOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:480px">
+    <div class="modal-head">
+      <h2>Import Members</h2>
+      <button class="x-btn" data-close="importOverlay" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13.5px;color:var(--ink-soft);margin-bottom:12px">
+        Upload an Excel (.xlsx) or CSV file using the template's column headers:
+        Last name, First name, Phone number, Address, Email address, Baptized, Birthday, Current status, Note.
+        Blank cells are fine. Photos and family relations are added in the app afterwards.
+      </p>
+      <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="width:auto">
+      <div style="margin-top:10px">
+        <label class="check-inline"><input type="checkbox" id="importSkipDup" checked>Skip rows whose first + last name already exists</label>
+      </div>
+      <div id="importPreview" class="hint" style="min-height:18px;margin-top:8px"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="importOverlay">Cancel</button>
+      <button class="btn btn-primary" id="doImportBtn" disabled>Import</button>
+    </div>
+  </div>
+</div>
+
 <div id="printArea"></div>
 <script>
 /* =====================================================================
@@ -335,30 +408,26 @@ const CHURCH_NAME = "Member Directory";
 const CHURCH_SUB  = "BEAUTIFUL HILL PRESBYTERIAN CHURCH";
 
 /* =====================================================================
-   ★★★ MEMBER FIELDS — add or remove categories here.
-   Each line becomes an input in the form, a row in the detail view,
-   and an option in Print Settings. All fields may be left blank.
-
-   type: "text" | "tel" | "email" | "date" | "select" | "textarea"
-   wide: true  → takes the full width of the form
-   card: true  → shown under the name on the directory card
-   For "select", list the choices in options: [...]
-
-   Example — to add a field later, just add one line:
-   { key:"cellGroup", label:"Cell group", type:"text" },
-   To remove a field, delete its line (existing data is kept, just hidden).
+   DEFAULT MEMBER FIELDS — used only until an admin saves a field
+   configuration in the app (⚙ Fields). After that, the configuration
+   stored in Firestore takes over and can be edited entirely in the app.
    ===================================================================== */
-const MEMBER_FIELDS = [
-  { key:"lastName",  label:"Last name",      type:"text" },
-  { key:"firstName", label:"First name",     type:"text" },
+const DEFAULT_FIELDS = [
+  { key:"lastName",  label:"Last name",      type:"text", locked:true },
+  { key:"firstName", label:"First name",     type:"text", locked:true },
+  { key:"koreanName",label:"Korean name",    type:"text" },
   { key:"phone",     label:"Phone number",   type:"tel",  card:true },
   { key:"address",   label:"Address",        type:"text", wide:true },
   { key:"email",     label:"Email address",  type:"email" },
   { key:"baptized",  label:"Baptized",       type:"select", options:["Yes","No"] },
   { key:"birthday",  label:"Birthday",       type:"date" },
+  { key:"joined",    label:"Date joined",    type:"date" },
+  { key:"department",label:"Department",     type:"select", options:["Worship","Education","Youth","Children","Missions","Administration"] },
+  { key:"smallGroup",label:"Small group",    type:"text" },
   { key:"status",    label:"Current status", type:"select", options:["Active","Inactive","Visitor","Moved"] },
   { key:"notes",     label:"Note",           type:"textarea", wide:true },
 ];
+let MEMBER_FIELDS = DEFAULT_FIELDS;
 
 /* Fields checked by default in Print Settings */
 const PRINT_DEFAULT = ["phone","address"];
@@ -401,7 +470,10 @@ if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes("PASTE")) {
       $("loginScreen").hidden = true;
       $("app").hidden = false;
       $("addBtn").hidden = myRole !== "admin";
+      $("importBtn").hidden = myRole !== "admin";
+      $("fieldsBtn").hidden = myRole !== "admin";
       $("accountBtn").hidden = myRole !== "admin";
+      startFieldConfig();
       startMembers();
     } else {
       if (unsubMembers) { unsubMembers(); unsubMembers = null; }
@@ -736,6 +808,209 @@ $("createAccBtn").onclick = async () => {
       ? "This username is already in use." : "Account creation failed: " + (e.message || "");
   }
   $("createAccBtn").disabled = false;
+};
+
+/* ---------- field configuration (stored in Firestore, editable in-app) ---------- */
+let unsubFields = null;
+function startFieldConfig(){
+  if (unsubFields) return;
+  unsubFields = db.collection("config").doc("fields").onSnapshot(doc => {
+    if (doc.exists && Array.isArray(doc.data().fields) && doc.data().fields.length) {
+      MEMBER_FIELDS = doc.data().fields;
+    } else {
+      MEMBER_FIELDS = DEFAULT_FIELDS;
+    }
+    buildHeaderMap();
+    render();
+  }, () => { MEMBER_FIELDS = DEFAULT_FIELDS; buildHeaderMap(); render(); });
+}
+
+const slugKey = label => {
+  const s = label.trim().replace(/[^a-zA-Z0-9 ]/g,"").split(/\s+/)
+    .map((w,i)=> i===0 ? w.toLowerCase() : w[0].toUpperCase()+w.slice(1).toLowerCase()).join("");
+  return s || "field" + Date.now();
+};
+
+let draftFields = [];
+$("fieldsBtn").onclick = () => {
+  draftFields = JSON.parse(JSON.stringify(MEMBER_FIELDS));
+  renderFieldRows();
+  $("fieldsOverlay").hidden = false;
+};
+function renderFieldRows(){
+  $("fieldRows").innerHTML = draftFields.map((f, i) => `
+    <div class="field-row" data-i="${i}">
+      <div class="fr-move">
+        <button class="btn btn-sm fr-up" ${i===0?"disabled":""}>↑</button>
+        <button class="btn btn-sm fr-down" ${i===draftFields.length-1?"disabled":""}>↓</button>
+      </div>
+      <div class="fr-main">
+        <input class="fr-label" value="${esc(f.label)}" ${f.locked?"readonly":""}>
+        <select class="fr-type" ${f.locked?"disabled":""}>
+          ${[["text","Text"],["select","Dropdown"],["date","Date"],["tel","Phone"],["email","Email"],["textarea","Long text"]]
+            .map(([v,l])=>`<option value="${v}"${f.type===v?" selected":""}>${l}</option>`).join("")}
+        </select>
+        ${f.type==="select"
+          ? `<input class="fr-options" placeholder="Options, separated by commas" value="${esc((f.options||[]).join(", "))}">`
+          : ``}
+      </div>
+      ${f.locked
+        ? `<span class="hint" style="align-self:center">used for names</span>`
+        : `<button class="btn btn-sm btn-danger fr-del">✕</button>`}
+    </div>`).join("");
+
+  $("fieldRows").querySelectorAll(".field-row").forEach(row => {
+    const i = +row.dataset.i;
+    row.querySelector(".fr-up") && (row.querySelector(".fr-up").onclick = () => {
+      [draftFields[i-1], draftFields[i]] = [draftFields[i], draftFields[i-1]]; renderFieldRows();
+    });
+    row.querySelector(".fr-down") && (row.querySelector(".fr-down").onclick = () => {
+      [draftFields[i+1], draftFields[i]] = [draftFields[i], draftFields[i+1]]; renderFieldRows();
+    });
+    row.querySelector(".fr-del") && (row.querySelector(".fr-del").onclick = () => {
+      if (!confirm(`Remove the field '${draftFields[i].label}'?\nExisting data is kept but hidden until the field is added back with the same name.`)) return;
+      draftFields.splice(i,1); renderFieldRows();
+    });
+    row.querySelector(".fr-label").oninput = e => { if(!draftFields[i].locked) draftFields[i].label = e.target.value; };
+    row.querySelector(".fr-type").onchange = e => {
+      draftFields[i].type = e.target.value;
+      if (e.target.value === "select" && !draftFields[i].options) draftFields[i].options = [];
+      draftFields[i].wide = e.target.value === "textarea";
+      renderFieldRows();
+    };
+    const opt = row.querySelector(".fr-options");
+    if (opt) opt.oninput = e => {
+      draftFields[i].options = e.target.value.split(",").map(s=>s.trim()).filter(Boolean);
+    };
+  });
+}
+$("fieldAddBtn").onclick = () => {
+  const label = $("newFieldLabel").value.trim();
+  const type = $("newFieldType").value;
+  if (!label) { alert("Please enter a field name."); return; }
+  const key = slugKey(label);
+  if (draftFields.some(f => f.key === key)) { alert("A field with this name already exists."); return; }
+  const f = { key, label, type };
+  if (type === "select") f.options = [];
+  if (type === "textarea") f.wide = true;
+  draftFields.push(f);
+  $("newFieldLabel").value = "";
+  renderFieldRows();
+};
+$("fieldsSaveBtn").onclick = async () => {
+  const bad = draftFields.find(f => f.type === "select" && (!f.options || !f.options.length));
+  if (bad) { alert(`The dropdown field '${bad.label}' needs at least one option.`); return; }
+  if (draftFields.some(f => !f.label.trim())) { alert("Every field needs a name."); return; }
+  $("fieldsSaveBtn").disabled = true;
+  try {
+    await db.collection("config").doc("fields").set({ fields: draftFields });
+    $("fieldsOverlay").hidden = true;
+    toast("Fields saved");
+  } catch(e) {
+    alert("Could not save fields. Make sure the security rules include the 'config' section (see the setup guide).");
+  }
+  $("fieldsSaveBtn").disabled = false;
+};
+
+/* ---------- import (Excel / CSV, admin) ---------- */
+let importRows = [];
+$("importBtn").onclick = () => {
+  importRows = [];
+  $("importFile").value = "";
+  $("importPreview").textContent = "";
+  $("doImportBtn").disabled = true;
+  $("importOverlay").hidden = false;
+};
+const normHeader = h => String(h||"").toLowerCase().replace(/[^a-z]/g,"");
+let HEADER_MAP = {};  // normalized header → field key
+function buildHeaderMap(){
+  HEADER_MAP = {};
+  MEMBER_FIELDS.forEach(f => {
+    HEADER_MAP[normHeader(f.label)] = f.key;
+    HEADER_MAP[normHeader(f.key)] = f.key;
+  });
+  // common variants
+  Object.assign(HEADER_MAP, { phone:"phone", email:"email", status:"status", note:"notes", notes:"notes", birthdate:"birthday", dob:"birthday" });
+}
+buildHeaderMap();
+
+function excelDateToISO(v){
+  if (v == null || v === "") return "";
+  if (v instanceof Date) return v.toISOString().slice(0,10);
+  if (typeof v === "number") {   // Excel serial date
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return isNaN(d) ? "" : d.toISOString().slice(0,10);
+  }
+  const s = String(v).trim();
+  const d = new Date(s);
+  return isNaN(d) ? s : d.toISOString().slice(0,10);
+}
+$("importFile").addEventListener("change", e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(new Uint8Array(ev.target.result), { type:"array", cellDates:true });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(sheet, { defval:"" });
+      importRows = raw.map(r => {
+        const m = {};
+        for (const [h, v] of Object.entries(r)) {
+          const key = HEADER_MAP[normHeader(h)];
+          if (!key) continue;
+          let val = v;
+          const f = MEMBER_FIELDS.find(x => x.key === key);
+          if (f && f.type === "date") val = excelDateToISO(v);
+          else val = String(v ?? "").trim();
+          if (key === "baptized") {
+            const low = val.toLowerCase();
+            val = ["y","yes","true","1","o"].includes(low) ? "Yes" : (["n","no","false","0","x"].includes(low) ? "No" : val);
+          }
+          m[key] = val;
+        }
+        return m;
+      })
+      .filter(m => (m.firstName || m.lastName))                       // needs a name
+      .filter(m => !(m.notes || "").toLowerCase().includes("example row")); // skip template example
+      $("importPreview").textContent = importRows.length
+        ? `Found ${importRows.length} member(s) ready to import.`
+        : "No valid rows found. Check that the header row matches the template.";
+      $("doImportBtn").disabled = importRows.length === 0;
+    } catch(err) {
+      $("importPreview").textContent = "Could not read the file. Please use the .xlsx template or a CSV.";
+      $("doImportBtn").disabled = true;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+$("doImportBtn").onclick = async () => {
+  if (!importRows.length) return;
+  const skipDup = $("importSkipDup").checked;
+  const existing = new Set(members.map(m => `${(m.firstName||"").toLowerCase()}|${(m.lastName||"").toLowerCase()}`));
+  let added = 0, skipped = 0;
+  $("doImportBtn").disabled = true;
+  $("importPreview").textContent = "Importing…";
+  try {
+    const batch = db.batch();
+    for (const row of importRows) {
+      const sig = `${(row.firstName||"").toLowerCase()}|${(row.lastName||"").toLowerCase()}`;
+      if (skipDup && existing.has(sig)) { skipped++; continue; }
+      const data = {};
+      MEMBER_FIELDS.forEach(f => data[f.key] = row[f.key] || "");
+      data.photo = ""; data.family = [];
+      data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+      batch.set(db.collection("members").doc(), data);
+      existing.add(sig);
+      added++;
+    }
+    await batch.commit();
+    $("importPreview").textContent = `✓ Imported ${added} member(s).` + (skipped ? ` Skipped ${skipped} duplicate(s).` : "");
+    toast(`Imported ${added} members`);
+  } catch(err) {
+    $("importPreview").textContent = "Import failed. Please check your admin permissions.";
+  }
+  $("doImportBtn").disabled = false;
 };
 
 /* ---------- print ---------- */
