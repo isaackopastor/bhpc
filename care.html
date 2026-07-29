@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Pastoral Care — BHPC</title>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+
+<style>
+:root{
+  --paper:#FAF8F2; --card:#FFFFFF; --ink:#26332C; --ink-soft:#5B6A61;
+  --pine:#2C4A3E; --pine-deep:#1E362D; --gold:#A8842A; --gold-soft:#EFE6CE;
+  --line:#DDD6C7; --danger:#A63B3B; --amber:#B07A1E; --ok:#3E7A52;
+  --radius:10px; --shadow:0 2px 10px rgba(38,51,44,.08);
+  --font-body:'Pretendard',-apple-system,'Malgun Gothic',sans-serif;
+  --font-serif:'Gowun Batang','Batang',serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--pine);outline-offset:1px}
+[hidden]{display:none !important}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:8px 13px;font-size:14px;font-weight:600}
+.btn:hover{background:#F3F0E7}
+.btn-primary{background:var(--pine);border-color:var(--pine);color:#fff}
+.btn-primary:hover{background:var(--pine-deep)}
+.btn-sm{padding:4px 9px;font-size:13px}
+.btn-danger{background:#fff;border-color:var(--danger);color:var(--danger)}
+
+/* login */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;background:linear-gradient(180deg,var(--paper),#F1EDE0)}
+.login-card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:38px 34px;width:100%;max-width:400px;text-align:center}
+.login-card .t1{font-family:var(--font-serif);font-size:24px;font-weight:700;color:var(--pine-deep);line-height:1.3}
+.login-card .t2{font-size:12.5px;color:var(--ink-soft);letter-spacing:.28em;margin:4px 0 24px}
+.login-card .rule{height:3px;border-top:1px solid var(--gold);border-bottom:1px solid var(--gold);width:56px;margin:0 auto 24px}
+.login-card label{display:block;text-align:left;font-size:13px;font-weight:600;color:var(--ink-soft);margin:12px 0 5px}
+.login-card input{width:100%}
+.login-card .btn{width:100%;justify-content:center;margin-top:20px;padding:12px}
+.login-msg{margin-top:14px;font-size:13px;color:var(--danger);min-height:18px}
+
+/* shell */
+header.appbar{background:var(--pine-deep);color:#fff;padding:0 18px;position:sticky;top:0;z-index:40}
+.appbar-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:11px 0}
+.appbar h1{font-family:var(--font-serif);font-size:19px;font-weight:700}
+.appbar h1 small{display:block;font-family:var(--font-body);font-size:10.5px;letter-spacing:.18em;color:#C9D4CD;font-weight:400}
+.appbar .spacer{flex:1}
+.appbar .btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25);color:#fff}
+.tabs{max-width:1180px;margin:14px auto 0;padding:0 18px;display:flex;gap:8px;flex-wrap:wrap}
+.tab{border:1px solid var(--line);background:#fff;border-radius:20px;padding:7px 16px;font-size:14px;font-weight:600;color:var(--ink-soft)}
+.tab.active{background:var(--pine);border-color:var(--pine);color:#fff}
+main{max-width:1180px;margin:16px auto 60px;padding:0 18px}
+
+/* dashboard table */
+.dash-tools{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.dash-tools input[type=search]{flex:1;min-width:180px}
+.tbl-wrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+table.dash{border-collapse:collapse;width:100%;min-width:760px;font-size:13.5px}
+table.dash th{background:var(--paper);text-align:left;padding:10px 12px;font-size:12.5px;color:var(--ink-soft);border-bottom:1px solid var(--line);white-space:nowrap}
+table.dash td{padding:9px 12px;border-bottom:1px solid #EFEBE0;white-space:nowrap}
+table.dash tr:hover td{background:#FBF9F2;cursor:pointer}
+.mname{font-weight:700;color:var(--pine-deep)}
+.pill{display:inline-block;border-radius:12px;padding:1px 9px;font-size:12px;font-weight:700}
+.p-ok{background:#E4EFE7;color:var(--ok)}
+.p-amber{background:#F5EAD3;color:var(--amber)}
+.p-bad{background:#F6E3E3;color:var(--danger)}
+.p-none{background:#EFECE3;color:#9A937F}
+
+/* attendance */
+.att-head{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.att-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.att-item{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;user-select:none}
+.att-item input{width:auto;accent-color:var(--pine)}
+.att-item.on{background:#EAF1EC;border-color:var(--pine)}
+.att-sum{font-size:13.5px;color:var(--ink-soft);margin-left:auto}
+
+/* member panel */
+.overlay{position:fixed;inset:0;background:rgba(30,43,36,.5);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:26px 12px;overflow-y:auto}
+.modal{background:var(--card);border-radius:14px;width:100%;max-width:680px;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid var(--line);background:var(--paper);border-radius:14px 14px 0 0}
+.modal-head h2{font-family:var(--font-serif);font-size:19px;color:var(--pine-deep)}
+.x-btn{background:none;border:none;font-size:22px;color:var(--ink-soft)}
+.modal-body{padding:18px 20px 24px}
+.sec{margin-bottom:24px}
+.sec h3{font-size:14px;color:var(--ink-soft);font-weight:700;margin-bottom:8px;border-bottom:1px dashed var(--line);padding-bottom:5px;display:flex;justify-content:space-between;align-items:center}
+.sec h3 .stat{font-weight:400;font-size:12.5px}
+.addline{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+.addline input[type=date]{width:150px}
+.addline select{width:auto}
+.addline .grow{flex:1;min-width:160px}
+.log{font-size:13.5px}
+.log .item{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #F0ECE1;align-items:flex-start}
+.log .d{color:var(--ink-soft);flex:0 0 92px;font-size:12.5px;padding-top:1px}
+.log .tag{flex:0 0 auto;font-size:11.5px;font-weight:700;color:var(--gold);border:1px solid var(--gold);border-radius:10px;padding:0 8px;align-self:flex-start;margin-top:1px}
+.log .txt{flex:1;white-space:pre-wrap}
+.log .del{background:none;border:none;color:#B9B29F;font-size:14px;padding:0 4px}
+.log .del:hover{color:var(--danger)}
+.prayer-current{background:var(--gold-soft);border:1px solid #E2D5AE;border-radius:8px;padding:10px 12px;margin-bottom:10px;white-space:pre-wrap;font-size:14px}
+.prayer-current .lbl{font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.1em;display:block;margin-bottom:3px}
+.att-dots{display:flex;gap:4px;flex-wrap:wrap}
+.dot{width:16px;height:16px;border-radius:4px;background:#EFECE3;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
+.dot.y{background:var(--ok)}
+.dot.n{background:#D9CDB8}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--pine-deep);color:#fff;border-radius:10px;padding:11px 20px;font-size:14px;z-index:120}
+.denied{max-width:520px;margin:80px auto;text-align:center;color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="t1">Pastoral Care</div>
+    <div class="t2">BHPC · PRIVATE</div>
+    <div class="rule"></div>
+    <label for="loginId">Username</label>
+    <input id="loginId" type="text" autocomplete="username">
+    <label for="loginPw">Password</label>
+    <input id="loginPw" type="password" autocomplete="current-password">
+    <button class="btn btn-primary" id="loginBtn">Sign in</button>
+    <div class="login-msg" id="loginMsg"></div>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <header class="appbar">
+    <div class="appbar-inner">
+      <h1>Pastoral Care<small>BEAUTIFUL HILL PRESBYTERIAN CHURCH</small></h1>
+      <div class="spacer"></div>
+      <a class="btn btn-sm" href="index.html" style="text-decoration:none">📖 Directory</a>
+      <button class="btn btn-sm" id="logoutBtn">Log out</button>
+    </div>
+  </header>
+  <div class="tabs">
+    <button class="tab active" data-tab="dash">Dashboard</button>
+    <button class="tab" data-tab="att">Attendance</button>
+  </div>
+  <main>
+    <section id="tab-dash">
+      <div class="dash-tools">
+        <input type="search" id="dashSearch" placeholder="Search name">
+        <select id="dashSort">
+          <option value="name">Sort: Name</option>
+          <option value="contact">Sort: Longest since contact</option>
+          <option value="attend">Sort: Lowest attendance</option>
+          <option value="prayer">Sort: Oldest prayer update</option>
+          <option value="service">Sort: Longest since service prayer</option>
+        </select>
+      </div>
+      <div class="tbl-wrap">
+        <table class="dash">
+          <thead><tr>
+            <th>Name</th><th>Attendance (12 wk)</th><th>Last contact</th>
+            <th>Prayer updated</th><th>Service prayer</th>
+          </tr></thead>
+          <tbody id="dashBody"></tbody>
+        </table>
+      </div>
+      <p class="att-sum" style="margin-top:8px">Click a member to add records. Color guide: <span class="pill p-ok">recent</span> <span class="pill p-amber">getting old</span> <span class="pill p-bad">needs attention</span></p>
+    </section>
+
+    <section id="tab-att" hidden>
+      <div class="att-head">
+        <label style="font-weight:600;font-size:14px">Sunday:</label>
+        <input type="date" id="attDate">
+        <button class="btn btn-sm" id="attPrev">← Prev</button>
+        <button class="btn btn-sm" id="attNext">Next →</button>
+        <button class="btn btn-primary btn-sm" id="attSave">Save</button>
+        <span class="att-sum" id="attSum"></span>
+      </div>
+      <div class="att-grid" id="attGrid"></div>
+    </section>
+  </main>
+</div>
+
+<div id="deniedScreen" hidden>
+  <div class="denied">
+    <h2 style="font-family:var(--font-serif);color:var(--pine-deep);margin-bottom:10px">Access restricted</h2>
+    <p>This page is for pastoral use only. Your account does not have pastor access.</p>
+    <p style="margin-top:14px"><a href="index.html">Go to the Member Directory →</a></p>
+    <p style="margin-top:14px"><button class="btn btn-sm" id="deniedLogout">Log out</button></p>
+  </div>
+</div>
+
+<!-- member care panel -->
+<div class="overlay" id="mOverlay" hidden>
+  <div class="modal">
+    <div class="modal-head">
+      <h2 id="mTitle">Member</h2>
+      <button class="x-btn" id="mClose" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="mBody"></div>
+  </div>
+</div>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBYg_YnAIiIDbtcyIZfXNo3sEG0cT-KD30",
+  authDomain: "bhpc-directory-dca02.firebaseapp.com",
+  projectId: "bhpc-directory-dca02",
+};
+const ID_DOMAIN = "@bhpc.member";
+const toEmail = v => v.includes("@") ? v : v + ID_DOMAIN;
+const CONTACT_TYPES = ["Call","Text","KakaoTalk","Visit","In person","Other"];
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fullName = m => [m.firstName, m.lastName].filter(Boolean).join(" ") || "(No name)";
+const todayISO = () => new Date().toLocaleDateString("sv-SE");   // YYYY-MM-DD local
+function lastSunday(from){
+  const d = from ? new Date(from + "T12:00:00") : new Date();
+  d.setDate(d.getDate() - d.getDay());
+  return d.toLocaleDateString("sv-SE");
+}
+function shiftWeek(dateStr, w){
+  const d = new Date(dateStr + "T12:00:00");
+  d.setDate(d.getDate() + 7*w);
+  return d.toLocaleDateString("sv-SE");
+}
+function daysAgo(dateStr){
+  if (!dateStr) return null;
+  return Math.floor((new Date(todayISO()) - new Date(dateStr)) / 86400000);
+}
+function agoText(dateStr){
+  const d = daysAgo(dateStr);
+  if (d === null) return "—";
+  if (d === 0) return "today";
+  if (d === 1) return "1 day ago";
+  if (d < 14) return d + " days ago";
+  if (d < 60) return Math.floor(d/7) + " wks ago";
+  return Math.floor(d/30) + " mo ago";
+}
+function pill(dateStr, amberDays, badDays){
+  if (!dateStr) return `<span class="pill p-none">never</span>`;
+  const d = daysAgo(dateStr);
+  const cls = d >= badDays ? "p-bad" : d >= amberDays ? "p-amber" : "p-ok";
+  return `<span class="pill ${cls}">${agoText(dateStr)}</span>`;
+}
+function toast(msg){
+  const t = document.createElement("div");
+  t.className="toast"; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),2000);
+}
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let members = [], contacts = [], prayers = [], services = [], attDocs = {};
+let unsubs = [];
+
+/* ---------- auth ---------- */
+$("loginBtn").onclick = async () => {
+  $("loginMsg").textContent = "";
+  try { await auth.signInWithEmailAndPassword(toEmail($("loginId").value.trim()), $("loginPw").value); }
+  catch(e){ $("loginMsg").textContent = "Sign-in failed. Please check your username and password."; }
+};
+$("loginPw").addEventListener("keydown", e => { if (e.key==="Enter") $("loginBtn").click(); });
+$("logoutBtn").onclick = () => auth.signOut();
+$("deniedLogout").onclick = () => auth.signOut();
+
+auth.onAuthStateChanged(async user => {
+  unsubs.forEach(u=>u()); unsubs=[];
+  if (!user) {
+    $("app").hidden = true; $("deniedScreen").hidden = true; $("loginScreen").hidden = false;
+    return;
+  }
+  let isPastor = false;
+  try {
+    const doc = await db.collection("users").doc(user.uid).get();
+    isPastor = doc.exists && doc.data().pastor === true;
+  } catch(e){}
+  $("loginScreen").hidden = true;
+  if (!isPastor) { $("deniedScreen").hidden = false; return; }
+  $("app").hidden = false;
+  startData();
+});
+
+/* ---------- data ---------- */
+function startData(){
+  unsubs.push(db.collection("members").onSnapshot(s => {
+    members = s.docs.map(d => ({id:d.id, ...d.data()}))
+      .sort((a,b)=>(a.lastName||"").localeCompare(b.lastName||"","en") || (a.firstName||"").localeCompare(b.firstName||"","en"));
+    renderAll();
+  }));
+  unsubs.push(db.collection("contacts").onSnapshot(s => { contacts = s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }));
+  unsubs.push(db.collection("prayers").onSnapshot(s => { prayers = s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }));
+  unsubs.push(db.collection("servicePrayers").onSnapshot(s => { services = s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }));
+  unsubs.push(db.collection("attendance").onSnapshot(s => {
+    attDocs = {}; s.docs.forEach(d => attDocs[d.id] = d.data());
+    renderAll();
+  }));
+  $("attDate").value = lastSunday();
+  loadAttendance();
+}
+
+/* ---------- per-member stats ---------- */
+function latest(list, mid){
+  const mine = list.filter(x => x.memberId === mid).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  return mine[0] || null;
+}
+function recorded12(){
+  return Object.keys(attDocs).sort().slice(-12);
+}
+function attendPct(mid){
+  const weeks = recorded12();
+  if (!weeks.length) return null;
+  const n = weeks.filter(w => (attDocs[w].present||[]).includes(mid)).length;
+  return Math.round(100*n/weeks.length);
+}
+
+/* ---------- tabs ---------- */
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
+  $("tab-dash").hidden = t.dataset.tab!=="dash";
+  $("tab-att").hidden = t.dataset.tab!=="att";
+});
+
+/* ---------- dashboard ---------- */
+function renderAll(){ renderDash(); renderAttGrid(); }
+["dashSearch","dashSort"].forEach(id => $(id).addEventListener("input", renderDash));
+function renderDash(){
+  const q = $("dashSearch").value.trim().toLowerCase();
+  let list = members.filter(m => !q || (fullName(m)+" "+(m.koreanName||"")).toLowerCase().includes(q));
+  const stat = m => ({
+    c: latest(contacts, m.id), p: latest(prayers, m.id), s: latest(services, m.id),
+    a: attendPct(m.id),
+    sCount: services.filter(x=>x.memberId===m.id).length
+  });
+  const cached = new Map(list.map(m => [m.id, stat(m)]));
+  const sortMode = $("dashSort").value;
+  const far = "0000-00-00";
+  if (sortMode==="contact") list.sort((a,b)=>((cached.get(a.id).c||{}).date||far).localeCompare((cached.get(b.id).c||{}).date||far));
+  if (sortMode==="prayer")  list.sort((a,b)=>((cached.get(a.id).p||{}).date||far).localeCompare((cached.get(b.id).p||{}).date||far));
+  if (sortMode==="service") list.sort((a,b)=>((cached.get(a.id).s||{}).date||far).localeCompare((cached.get(b.id).s||{}).date||far));
+  if (sortMode==="attend")  list.sort((a,b)=>((cached.get(a.id).a??-1)-(cached.get(b.id).a??-1)));
+  $("dashBody").innerHTML = list.map(m => {
+    const st = cached.get(m.id);
+    const att = st.a===null ? `<span class="pill p-none">no data</span>`
+      : `<span class="pill ${st.a>=75?"p-ok":st.a>=50?"p-amber":"p-bad"}">${st.a}%</span>`;
+    return `<tr data-id="${m.id}">
+      <td class="mname">${esc(fullName(m))}${m.koreanName?` <span style="font-weight:400;color:var(--ink-soft)">${esc(m.koreanName)}</span>`:""}</td>
+      <td>${att}</td>
+      <td>${pill(st.c && st.c.date, 14, 21)}</td>
+      <td>${pill(st.p && st.p.date, 30, 60)}</td>
+      <td>${st.s ? `${pill(st.s.date, 90, 180)} <span style="color:var(--ink-soft);font-size:12px">×${st.sCount}</span>` : `<span class="pill p-none">never</span>`}</td>
+    </tr>`;
+  }).join("");
+  $("dashBody").querySelectorAll("tr").forEach(tr => tr.onclick = () => openMember(tr.dataset.id));
+}
+
+/* ---------- attendance ---------- */
+let attPresent = new Set();
+$("attDate").addEventListener("change", () => { $("attDate").value = lastSunday($("attDate").value); loadAttendance(); });
+$("attPrev").onclick = () => { $("attDate").value = shiftWeek($("attDate").value,-1); loadAttendance(); };
+$("attNext").onclick = () => { $("attDate").value = shiftWeek($("attDate").value, 1); loadAttendance(); };
+async function loadAttendance(){
+  const d = $("attDate").value;
+  attPresent = new Set(((attDocs[d]||{}).present)||[]);
+  renderAttGrid();
+}
+function renderAttGrid(){
+  const d = $("attDate").value;
+  if (!d) return;
+  $("attGrid").innerHTML = members.map(m => `
+    <label class="att-item ${attPresent.has(m.id)?"on":""}">
+      <input type="checkbox" data-id="${m.id}" ${attPresent.has(m.id)?"checked":""}>
+      <span>${esc(fullName(m))}</span>
+    </label>`).join("");
+  $("attSum").textContent = `${attPresent.size} / ${members.length} present`;
+  $("attGrid").querySelectorAll("input").forEach(cb => cb.onchange = () => {
+    cb.checked ? attPresent.add(cb.dataset.id) : attPresent.delete(cb.dataset.id);
+    cb.closest(".att-item").classList.toggle("on", cb.checked);
+    $("attSum").textContent = `${attPresent.size} / ${members.length} present`;
+  });
+}
+$("attSave").onclick = async () => {
+  const d = $("attDate").value;
+  if (!d) return;
+  try {
+    await db.collection("attendance").doc(d).set({ date:d, present:[...attPresent] });
+    toast(`Attendance saved for ${d}`);
+  } catch(e){ alert("Save failed. Check that your account has pastor access and the rules are updated."); }
+};
+
+/* ---------- member panel ---------- */
+let curId = null;
+$("mClose").onclick = () => $("mOverlay").hidden = true;
+$("mOverlay").addEventListener("click", e => { if (e.target === $("mOverlay")) $("mOverlay").hidden = true; });
+function openMember(id){
+  curId = id;
+  renderMember();
+  $("mOverlay").hidden = false;
+}
+function renderMember(){
+  const m = members.find(x=>x.id===curId);
+  if (!m) return;
+  $("mTitle").textContent = fullName(m) + (m.koreanName ? ` (${m.koreanName})` : "");
+  const myC = contacts.filter(x=>x.memberId===curId).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const myP = prayers.filter(x=>x.memberId===curId).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const myS = services.filter(x=>x.memberId===curId).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const weeks = recorded12();
+  const dots = weeks.map(w => {
+    const y = (attDocs[w].present||[]).includes(curId);
+    return `<span class="dot ${y?"y":"n"}" title="${w}">${y?"✓":""}</span>`;
+  }).join("");
+  const pct = attendPct(curId);
+
+  $("mBody").innerHTML = `
+    <div class="sec">
+      <h3>Attendance <span class="stat">${pct===null?"no data":pct+"% of last "+weeks.length+" recorded Sundays"}</span></h3>
+      <div class="att-dots">${dots || '<span class="stat">No Sundays recorded yet.</span>'}</div>
+    </div>
+
+    <div class="sec">
+      <h3>Contact history <span class="stat">${myC.length} total · last: ${myC[0]?agoText(myC[0].date):"never"}</span></h3>
+      <div class="addline">
+        <input type="date" id="cDate" value="${todayISO()}">
+        <select id="cType">${CONTACT_TYPES.map(t=>`<option>${t}</option>`).join("")}</select>
+        <input class="grow" id="cNote" placeholder="Note (optional)">
+        <button class="btn btn-primary btn-sm" id="cAdd">Add</button>
+      </div>
+      <div class="log">${myC.map(x=>`
+        <div class="item"><span class="d">${esc(x.date)}</span><span class="tag">${esc(x.type||"")}</span>
+        <span class="txt">${esc(x.note||"")}</span>
+        <button class="del" data-col="contacts" data-id="${x.id}">✕</button></div>`).join("") || '<span class="stat">No contacts recorded.</span>'}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Prayer topics <span class="stat">${myP.length} total · updated: ${myP[0]?agoText(myP[0].date):"never"}</span></h3>
+      ${myP[0] ? `<div class="prayer-current"><span class="lbl">CURRENT · ${esc(myP[0].date)}</span>${esc(myP[0].text||"")}</div>` : ""}
+      <div class="addline">
+        <input type="date" id="pDate" value="${todayISO()}">
+        <input class="grow" id="pText" placeholder="New prayer topic">
+        <button class="btn btn-primary btn-sm" id="pAdd">Add</button>
+      </div>
+      <div class="log">${myP.slice(1).map(x=>`
+        <div class="item"><span class="d">${esc(x.date)}</span>
+        <span class="txt">${esc(x.text||"")}</span>
+        <button class="del" data-col="prayers" data-id="${x.id}">✕</button></div>`).join("") || (myP.length<=1?'<span class="stat">Older topics will appear here.</span>':"")}
+      </div>
+    </div>
+
+    <div class="sec">
+      <h3>Service prayer <span class="stat">${myS.length} times · last: ${myS[0]?agoText(myS[0].date):"never"}</span></h3>
+      <div class="addline">
+        <input type="date" id="sDate" value="${lastSunday()}">
+        <input class="grow" id="sNote" placeholder="Note (optional)">
+        <button class="btn btn-primary btn-sm" id="sAdd">Add</button>
+      </div>
+      <div class="log">${myS.map(x=>`
+        <div class="item"><span class="d">${esc(x.date)}</span>
+        <span class="txt">${esc(x.note||"")}</span>
+        <button class="del" data-col="servicePrayers" data-id="${x.id}">✕</button></div>`).join("") || '<span class="stat">Not recorded yet.</span>'}
+      </div>
+    </div>`;
+
+  $("cAdd").onclick = () => addRec("contacts", { date:$("cDate").value, type:$("cType").value, note:$("cNote").value.trim() });
+  $("pAdd").onclick = () => {
+    if (!$("pText").value.trim()) { alert("Please enter the prayer topic."); return; }
+    addRec("prayers", { date:$("pDate").value, text:$("pText").value.trim() });
+  };
+  $("sAdd").onclick = () => addRec("servicePrayers", { date:$("sDate").value, note:$("sNote").value.trim() });
+  $("mBody").querySelectorAll(".del").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this record?")) return;
+    await db.collection(b.dataset.col).doc(b.dataset.id).delete();
+    setTimeout(renderMember, 300);
+  });
+}
+async function addRec(col, data){
+  if (!data.date) { alert("Please pick a date."); return; }
+  try {
+    await db.collection(col).add({ ...data, memberId: curId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    toast("Added");
+    setTimeout(renderMember, 300);
+  } catch(e){ alert("Save failed. Check pastor access and security rules."); }
+}
+</script>
+</body>
+</html>
