@@ -82,6 +82,9 @@ header.appbar{background:var(--pine-deep);color:#fff;padding:0 18px;position:sti
 .count-note{font-size:13px;color:var(--ink-soft);margin-left:auto}
 
 main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+.grid-sec{grid-column:1/-1;font-family:var(--font-serif);font-size:18px;color:var(--pine-deep);border-bottom:2px solid var(--gold);padding:14px 0 6px;display:flex;align-items:baseline;gap:8px}
+.grid-sec span{font-family:var(--font-body);font-size:12.5px;font-weight:400;color:var(--ink-soft)}
+.grid-sec:first-child{padding-top:0}
 
 /* ---------- member card ---------- */
 .mcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px;cursor:pointer;position:relative;transition:transform .12s, box-shadow .12s;text-align:center;border-top:3px solid var(--pine)}
@@ -211,9 +214,22 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
   <div class="toolbar">
     <input type="search" id="searchBox" placeholder="Search name, phone, or address">
     <select id="statusFilter"><option value="">All statuses</option></select>
+    <select id="deptFilter"><option value="">All departments</option></select>
+    <select id="monthFilter">
+      <option value="">All birthdays</option>
+      <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+      <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+      <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+      <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+    </select>
     <select id="sortSel">
       <option value="last">By last name</option>
       <option value="first">By first name</option>
+      <option value="bday">By birthday (month/day)</option>
+    </select>
+    <select id="groupSel">
+      <option value="">No grouping</option>
+      <option value="dept">Group by department</option>
     </select>
     <span class="count-note" id="countNote"></span>
   </div>
@@ -315,7 +331,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
           <select id="pCols"><option value="3">3 (large cards)</option><option value="4" selected>4 (default)</option></select>
         </div>
         <div><label>Sort</label>
-          <select id="pSort"><option value="last">By last name</option><option value="first">By first name</option></select>
+          <select id="pSort"><option value="last">By last name</option><option value="first">By first name</option><option value="bday">By birthday (month/day)</option></select>
         </div>
         <div class="full">
           <label>Include</label>
@@ -509,11 +525,17 @@ function startMembers(){
 }
 
 /* ---------- filtering & sorting ---------- */
+const bdayMonth = m => { const b = m.birthday || ""; return /^\d{4}-\d{2}-\d{2}/.test(b) ? parseInt(b.slice(5,7),10) : null; };
+const bdayMD = m => { const b = m.birthday || ""; return /^\d{4}-\d{2}-\d{2}/.test(b) ? b.slice(5) : "99-99"; };
 function currentList(){
   const q = $("searchBox").value.trim().toLowerCase();
   const st = $("statusFilter").value;
+  const dept = $("deptFilter").value;
+  const mon = $("monthFilter").value;
   let list = members.filter(m => {
     if (st && (m.status||"") !== st) return false;
+    if (dept && (m.department||"") !== dept) return false;
+    if (mon && bdayMonth(m) !== parseInt(mon,10)) return false;
     if (!q) return true;
     const hay = MEMBER_FIELDS.map(f => m[f.key]).concat([fullName(m)]).join(" ").toLowerCase();
     return hay.includes(q);
@@ -525,32 +547,69 @@ function sortList(list, mode){
   if (mode === "first") {
     return [...list].sort((a,b) => cmp(a.firstName,b.firstName) || cmp(a.lastName,b.lastName));
   }
+  if (mode === "bday") {
+    return [...list].sort((a,b) => bdayMD(a).localeCompare(bdayMD(b)) || cmp(a.lastName,b.lastName));
+  }
   return [...list].sort((a,b) => cmp(a.lastName,b.lastName) || cmp(a.firstName,b.firstName));
 }
 
 /* ---------- render grid ---------- */
+function fillSelectFilter(elId, fieldKey, allLabel){
+  const field = MEMBER_FIELDS.find(f => f.key === fieldKey);
+  const el = $(elId);
+  if (!field) { el.hidden = true; return null; }
+  el.hidden = false;
+  const cur = el.value;
+  const opts = (field.options || []).filter(o => members.some(m => m[fieldKey] === o));
+  members.forEach(m => { const v = m[fieldKey]; if (v && !opts.includes(v)) opts.push(v); });
+  el.innerHTML = `<option value="">${allLabel}</option>` + opts.map(o => `<option${o===cur?" selected":""}>${esc(o)}</option>`).join("");
+  return field;
+}
+function cityOf(addr){
+  if (!addr) return "";
+  const parts = addr.split(",").map(s => s.trim()).filter(Boolean);
+  const isStateZip = s => /^[A-Za-z]{2}\.?\s*\d{5}/.test(s) || /^[A-Z]{2}$/.test(s) || /^\d{5}/.test(s);
+  if (parts.length === 1) return parts[0];
+  if (parts.length === 2) return isStateZip(parts[1]) ? parts[0] : parts[1];
+  return isStateZip(parts[parts.length-1]) ? parts[parts.length-2] : parts[parts.length-1];
+}
+function memberCardHTML(m){
+  const nameLF = [m.lastName, m.firstName].filter(Boolean).join(" ") || fullName(m);
+  const bd = /^\d{4}-\d{2}-\d{2}/.test(m.birthday||"")
+    ? new Date(m.birthday+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "";
+  return `
+    <div class="mcard" data-id="${m.id}" tabindex="0" role="button" aria-label="View details for ${esc(fullName(m))}">
+      ${m.photo ? `<img class="photo" src="${m.photo}" alt="">` : `<div class="no-photo">${esc(initial(m))}</div>`}
+      <div class="name">${esc(nameLF)}</div>
+      <div class="meta">${esc(m.phone || "　")}</div>
+      <div class="meta">${bd ? "🎂 " + bd : "　"}</div>
+      <div class="meta">${esc(cityOf(m.address) || "　")}</div>
+    </div>`;
+}
 function render(){
-  const statusField = MEMBER_FIELDS.find(f => f.key === "status");
-  if (statusField) {
-    const cur = $("statusFilter").value;
-    const present = statusField.options.filter(o => members.some(m => m.status === o));
-    $("statusFilter").innerHTML = `<option value="">All statuses</option>` +
-      present.map(o => `<option${o===cur?" selected":""}>${esc(o)}</option>`).join("");
-  } else {
-    $("statusFilter").hidden = true;
-  }
+  fillSelectFilter("statusFilter", "status", "All statuses");
+  const deptField = fillSelectFilter("deptFilter", "department", "All departments");
 
   const list = currentList();
   $("countNote").textContent = `Showing ${list.length} of ${members.length} members`;
-  const cardFields = MEMBER_FIELDS.filter(f => f.card);
-  $("grid").innerHTML = list.map(m => `
-    <div class="mcard" data-id="${m.id}" tabindex="0" role="button" aria-label="View details for ${esc(fullName(m))}">
-      ${m.photo ? `<img class="photo" src="${m.photo}" alt="">` : `<div class="no-photo">${esc(initial(m))}</div>`}
-      <div class="name">${esc(fullName(m))}</div>
-      ${cardFields.map(f => `<div class="meta">${esc(m[f.key] || "　")}</div>`).join("")}
-    </div>`).join("") || `<p style="grid-column:1/-1;color:var(--ink-soft)">No members to display.</p>`;
+
+  let html;
+  if ($("groupSel").value === "dept" && deptField) {
+    const order = [...(deptField.options || [])];
+    members.forEach(m => { const v = m.department; if (v && !order.includes(v)) order.push(v); });
+    order.push("");
+    html = order.map(dep => {
+      const group = list.filter(m => (m.department||"") === dep);
+      if (!group.length) return "";
+      return `<h2 class="grid-sec">${dep ? esc(dep) : "No department"} <span>${group.length}</span></h2>`
+        + group.map(m => memberCardHTML(m)).join("");
+    }).join("");
+  } else {
+    html = list.map(m => memberCardHTML(m)).join("");
+  }
+  $("grid").innerHTML = html || `<p style="grid-column:1/-1;color:var(--ink-soft)">No members to display.</p>`;
 }
-["searchBox","statusFilter","sortSel"].forEach(id => $(id).addEventListener("input", render));
+["searchBox","statusFilter","deptFilter","monthFilter","sortSel","groupSel"].forEach(id => $(id).addEventListener("input", render));
 $("grid").addEventListener("click", e => {
   const card = e.target.closest(".mcard");
   if (card) openDetail(card.dataset.id);
