@@ -264,8 +264,11 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
             <img id="editPhotoPreview" alt="">
             <div>
               <input type="file" id="editPhotoFile" accept="image/*" style="width:auto">
-              <div class="hint">Photos are compressed automatically (~60–100KB)</div>
-              <button class="btn btn-sm" id="photoRemoveBtn" type="button" style="margin-top:6px">Remove photo</button>
+              <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">
+                <button class="btn btn-sm" id="pastePhotoBtn" type="button">📋 Paste from clipboard</button>
+                <button class="btn btn-sm" id="photoRemoveBtn" type="button">Remove photo</button>
+              </div>
+              <div class="hint">You can also press Ctrl+V while this window is open. Photos are compressed automatically (~60–100KB)</div>
             </div>
           </div>
         </div>
@@ -676,6 +679,31 @@ $("editPhotoFile").addEventListener("change", async e => {
   $("editPhotoPreview").src = editPhotoData;
 });
 $("photoRemoveBtn").onclick = () => { editPhotoData = ""; $("editPhotoPreview").src = ""; $("editPhotoFile").value = ""; };
+
+async function usePhotoBlob(blob){
+  editPhotoData = await compressImage(blob);
+  $("editPhotoPreview").src = editPhotoData;
+  toast("Photo added");
+}
+// paste via button (reads the clipboard directly)
+$("pastePhotoBtn").onclick = async () => {
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const type = item.types.find(t => t.startsWith("image/"));
+      if (type) { await usePhotoBlob(await item.getType(type)); return; }
+    }
+    alert("No image found in the clipboard. Copy an image first, then try again.");
+  } catch(e) {
+    alert("Could not read the clipboard. Copy an image and press Ctrl+V in this window instead.");
+  }
+};
+// paste via Ctrl+V while the edit window is open
+document.addEventListener("paste", e => {
+  if ($("editOverlay").hidden) return;
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+  if (item) { e.preventDefault(); usePhotoBlob(item.getAsFile()); }
+});
 function compressImage(file){
   return new Promise((resolve, reject) => {
     const img = new Image();
