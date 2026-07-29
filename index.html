@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Beautiful Hill Presbyterian Church</title>
+
+<!-- Firebase (compat SDK) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+
+<style>
+:root{
+  --paper:#FAF8F2;
+  --card:#FFFFFF;
+  --ink:#26332C;
+  --ink-soft:#5B6A61;
+  --pine:#2C4A3E;
+  --pine-deep:#1E362D;
+  --gold:#A8842A;
+  --gold-soft:#EFE6CE;
+  --line:#DDD6C7;
+  --danger:#A63B3B;
+  --radius:10px;
+  --shadow:0 2px 10px rgba(38,51,44,.08);
+  --font-body:'Pretendard',-apple-system,'Malgun Gothic',sans-serif;
+  --font-serif:'Gowun Batang','Batang',serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:14px;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--pine);outline-offset:1px;border-color:var(--pine)}
+[hidden]{display:none !important}
+
+/* ---------- buttons ---------- */
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:8px;padding:9px 14px;font-size:14px;font-weight:600;transition:background .15s}
+.btn:hover{background:#F3F0E7}
+.btn-primary{background:var(--pine);border-color:var(--pine);color:#fff}
+.btn-primary:hover{background:var(--pine-deep)}
+.btn-gold{background:var(--gold);border-color:var(--gold);color:#fff}
+.btn-gold:hover{filter:brightness(.93)}
+.btn-danger{background:#fff;border-color:var(--danger);color:var(--danger)}
+.btn-danger:hover{background:#FBEFEF}
+.btn-sm{padding:5px 10px;font-size:13px}
+.btn:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+/* ---------- login ---------- */
+#loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
+  background:linear-gradient(180deg,var(--paper) 0%, #F1EDE0 100%)}
+.login-card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:38px 34px;width:100%;max-width:400px;text-align:center}
+.login-card .book-title{font-family:var(--font-serif);font-size:25px;font-weight:700;color:var(--pine-deep);letter-spacing:.02em;line-height:1.3;margin-bottom:6px}
+.login-card .book-sub{font-size:13px;color:var(--ink-soft);letter-spacing:.28em;margin-bottom:26px}
+.login-card .rule{height:3px;border-top:1px solid var(--gold);border-bottom:1px solid var(--gold);width:56px;margin:0 auto 26px}
+.login-card label{display:block;text-align:left;font-size:13px;font-weight:600;color:var(--ink-soft);margin:12px 0 5px}
+.login-card .btn{width:100%;justify-content:center;margin-top:20px;padding:12px}
+.login-msg{margin-top:14px;font-size:13px;color:var(--danger);min-height:18px}
+.setup-note{margin-top:18px;font-size:12.5px;color:var(--ink-soft);background:var(--gold-soft);border-radius:8px;padding:10px 12px;text-align:left}
+
+/* ---------- app shell ---------- */
+header.appbar{background:var(--pine-deep);color:#fff;padding:0 18px;position:sticky;top:0;z-index:40}
+.appbar-inner{max-width:1180px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:12px 0}
+.appbar h1{font-family:var(--font-serif);font-size:20px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
+.appbar h1 small{display:block;font-family:var(--font-body);font-size:10.5px;font-weight:400;letter-spacing:.18em;color:#C9D4CD}
+.appbar .spacer{flex:1}
+.appbar .btn{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25);color:#fff}
+.appbar .btn:hover{background:rgba(255,255,255,.2)}
+.appbar .btn-gold{background:var(--gold);border-color:var(--gold)}
+
+.toolbar{max-width:1180px;margin:18px auto 0;padding:0 18px;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.toolbar input[type=search]{flex:1;min-width:200px}
+.toolbar select{width:auto}
+.count-note{font-size:13px;color:var(--ink-soft);margin-left:auto}
+
+main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px}
+
+/* ---------- member card ---------- */
+.mcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px;cursor:pointer;position:relative;transition:transform .12s, box-shadow .12s;text-align:center;border-top:3px solid var(--pine)}
+.mcard:hover{transform:translateY(-2px);box-shadow:0 6px 16px rgba(38,51,44,.14)}
+.mcard .photo{width:100%;aspect-ratio:3/3.4;object-fit:cover;border-radius:6px;background:#EDEAE0;display:block}
+.mcard .no-photo{width:100%;aspect-ratio:3/3.4;border-radius:6px;background:#EDEAE0;display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:34px;color:#B9B29F}
+.mcard .name{font-family:var(--font-serif);font-size:17.5px;font-weight:700;margin-top:9px;color:var(--pine-deep)}
+.mcard .meta{font-size:12.5px;color:var(--ink-soft);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ---------- modal ---------- */
+.overlay{position:fixed;inset:0;background:rgba(30,43,36,.5);z-index:60;display:flex;align-items:flex-start;justify-content:center;padding:30px 14px;overflow-y:auto}
+.modal{background:var(--card);border-radius:14px;width:100%;max-width:640px;box-shadow:0 12px 40px rgba(0,0,0,.25);overflow:hidden}
+.modal-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--line);background:var(--paper)}
+.modal-head h2{font-family:var(--font-serif);font-size:19px;color:var(--pine-deep)}
+.modal-body{padding:20px}
+.modal-foot{padding:14px 20px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;background:var(--paper)}
+.x-btn{background:none;border:none;font-size:22px;color:var(--ink-soft);line-height:1;padding:4px}
+
+/* detail view */
+.detail-top{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+.detail-top img,.detail-top .no-photo{width:150px;aspect-ratio:3/3.4;object-fit:cover;border-radius:8px;background:#EDEAE0;border:1px solid var(--line)}
+.detail-top .no-photo{display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:40px;color:#B9B29F}
+.detail-name{font-family:var(--font-serif);font-size:25px;font-weight:700;color:var(--pine-deep)}
+.detail-badge{display:inline-block;border:1px solid var(--gold);color:var(--gold);border-radius:20px;padding:2px 11px;font-size:12.5px;font-weight:700;margin-left:8px;vertical-align:middle}
+.detail-list{margin-top:12px;display:grid;gap:7px;font-size:14.5px}
+.detail-list .row{display:flex;gap:10px}
+.detail-list .k{width:92px;flex-shrink:0;color:var(--ink-soft);font-size:13px;padding-top:1px}
+.detail-list a{color:var(--pine);text-decoration:none}
+.fam-box{margin-top:20px;border-top:1px dashed var(--line);padding-top:14px}
+.fam-box h3{font-size:14px;color:var(--ink-soft);font-weight:700;margin-bottom:8px}
+.fam-chip{display:inline-flex;align-items:center;gap:6px;background:var(--gold-soft);border:1px solid #E2D5AE;border-radius:20px;padding:5px 12px;font-size:13.5px;margin:0 6px 6px 0;cursor:pointer}
+.fam-chip b{color:var(--pine-deep)}
+.fam-chip span{color:var(--ink-soft);font-size:12px}
+.memo-box{margin-top:14px;font-size:13.5px;color:var(--ink-soft);background:var(--paper);border-radius:8px;padding:10px 12px;white-space:pre-wrap}
+
+/* edit form */
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form-grid .full{grid-column:1/-1}
+.form-grid label{display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:4px}
+@media(max-width:520px){.form-grid{grid-template-columns:1fr}}
+.photo-edit{display:flex;gap:14px;align-items:center}
+.photo-edit img{width:84px;aspect-ratio:3/3.4;object-fit:cover;border-radius:6px;background:#EDEAE0;border:1px solid var(--line)}
+.rel-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.rel-row select{width:auto;flex:1}
+.rel-row select.rel-type{flex:0 0 120px}
+.hint{font-size:12px;color:var(--ink-soft);margin-top:4px}
+
+/* account manager */
+.user-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);font-size:14px;flex-wrap:wrap}
+.user-row .email{flex:1;min-width:160px;word-break:break-all}
+.role-badge{font-size:12px;border-radius:12px;padding:2px 10px;font-weight:700}
+.role-admin{background:var(--pine);color:#fff}
+.role-viewer{background:var(--gold-soft);color:var(--gold)}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--pine-deep);color:#fff;border-radius:10px;padding:11px 20px;font-size:14px;z-index:120;box-shadow:var(--shadow)}
+.check-inline{font-weight:400;display:inline-flex;gap:5px;margin:0 14px 6px 0;align-items:center}
+.check-inline input{width:auto}
+
+/* ---------- print ---------- */
+#printArea{display:none}
+@media print{
+  body>*:not(#printArea){display:none !important}
+  body{background:#fff}
+  #printArea{display:block}
+  @page{margin:12mm}
+}
+#printArea .print-title{font-family:var(--font-serif);font-size:22pt;font-weight:700;text-align:center;letter-spacing:.08em;color:#1E362D;margin-bottom:2mm}
+#printArea .print-sub{text-align:center;font-size:10pt;color:#666;margin-bottom:6mm}
+#printArea .print-rule{height:3px;border-top:1px solid #A8842A;border-bottom:1px solid #A8842A;width:70px;margin:0 auto 8mm}
+.print-grid{display:grid;gap:5mm}
+.print-grid.cols-3{grid-template-columns:repeat(3,1fr)}
+.print-grid.cols-4{grid-template-columns:repeat(4,1fr)}
+.pcard{border:1px solid #CCC4B2;border-radius:6px;padding:3mm;text-align:center;page-break-inside:avoid;break-inside:avoid}
+.pcard img,.pcard .pnp{width:100%;aspect-ratio:3/3.4;object-fit:cover;border-radius:3px;background:#EFECE3}
+.pcard .pnp{display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:20pt;color:#B9B29F}
+.pcard .pname{font-family:var(--font-serif);font-size:12pt;font-weight:700;margin-top:2mm;color:#1E362D}
+.pcard .pinfo{font-size:8pt;color:#444;margin-top:1mm;line-height:1.45;word-break:keep-all}
+</style>
+</head>
+<body>
+
+<!-- ===================== Login screen ===================== -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="book-title">Beautiful Hill<br>Presbyterian Church</div>
+    <div class="book-sub">MEMBER DIRECTORY</div>
+    <div class="rule"></div>
+    <label for="loginEmail">Username</label>
+    <input id="loginEmail" type="text" autocomplete="username" placeholder="Enter username">
+    <label for="loginPw">Password</label>
+    <input id="loginPw" type="password" autocomplete="current-password" placeholder="Password">
+    <button class="btn btn-primary" id="loginBtn">Sign in</button>
+    <div class="login-msg" id="loginMsg"></div>
+    <div class="setup-note" id="setupNote" hidden>
+      ⚠️ Firebase is not configured yet. Paste your project settings into the
+      <b>FIREBASE_CONFIG</b> section at the bottom of index.html.
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Main app ===================== -->
+<div id="app" hidden>
+  <header class="appbar">
+    <div class="appbar-inner">
+      <h1 id="churchTitle">Member Directory<small id="churchNameEn">BEAUTIFUL HILL PRESBYTERIAN CHURCH</small></h1>
+      <div class="spacer"></div>
+      <button class="btn btn-sm" id="printOpenBtn">🖨 Print</button>
+      <button class="btn btn-sm btn-gold" id="addBtn" hidden>＋ Add Member</button>
+      <button class="btn btn-sm" id="accountBtn" hidden>👤 Accounts</button>
+      <button class="btn btn-sm" id="logoutBtn">Log out</button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <input type="search" id="searchBox" placeholder="Search name, phone, or address">
+    <select id="statusFilter"><option value="">All statuses</option></select>
+    <select id="sortSel">
+      <option value="last">By last name</option>
+      <option value="first">By first name</option>
+    </select>
+    <span class="count-note" id="countNote"></span>
+  </div>
+
+  <main id="grid" aria-live="polite"></main>
+</div>
+
+<!-- ===================== Detail view ===================== -->
+<div class="overlay" id="detailOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Member Details</h2>
+      <button class="x-btn" data-close="detailOverlay" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+    <div class="modal-foot" id="detailFoot"></div>
+  </div>
+</div>
+
+<!-- ===================== Add / Edit ===================== -->
+<div class="overlay" id="editOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2 id="editTitle">Add Member</h2>
+      <button class="x-btn" data-close="editOverlay" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid" style="margin-bottom:12px">
+        <div class="full">
+          <label>Photo</label>
+          <div class="photo-edit">
+            <img id="editPhotoPreview" alt="">
+            <div>
+              <input type="file" id="editPhotoFile" accept="image/*" style="width:auto">
+              <div class="hint">Photos are compressed automatically (~60–100KB)</div>
+              <button class="btn btn-sm" id="photoRemoveBtn" type="button" style="margin-top:6px">Remove photo</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="form-grid" id="dynFields"></div>
+      <div class="form-grid" style="margin-top:12px">
+        <div class="full">
+          <label>Family &amp; Relations</label>
+          <div id="relRows"></div>
+          <button class="btn btn-sm" id="relAddBtn" type="button">＋ Add relation</button>
+          <div class="hint">The inverse relation is added to the other person automatically on save.</div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="editOverlay">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Account management ===================== -->
+<div class="overlay" id="accountOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <h2>Account Management</h2>
+      <button class="x-btn" data-close="accountOverlay" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div><label>Username</label><input id="newAccEmail" type="text" placeholder="e.g. jdoe"></div>
+        <div><label>Initial password (6+ characters)</label><input id="newAccPw" placeholder="e.g. bhpc2026!"></div>
+        <div><label>Role</label>
+          <select id="newAccRole">
+            <option value="viewer">View only</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div style="align-self:end"><button class="btn btn-primary" id="createAccBtn" style="width:100%">Create account</button></div>
+      </div>
+      <div class="hint" id="accMsg" style="min-height:16px;margin-top:6px"></div>
+      <h3 style="font-size:14px;color:var(--ink-soft);margin:18px 0 6px">Registered accounts</h3>
+      <div id="userList"></div>
+      <div class="hint" style="margin-top:10px">
+        ※ To fully delete an account (block sign-in), delete the user in Firebase Console → Authentication,
+        then click Remove here.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Print options ===================== -->
+<div class="overlay" id="printOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:480px">
+    <div class="modal-head">
+      <h2>Print Settings</h2>
+      <button class="x-btn" data-close="printOverlay" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="full"><label>Directory title</label><input id="pTitle" value="BHPC Member Directory"></div>
+        <div><label>Cards per row</label>
+          <select id="pCols"><option value="3">3 (large cards)</option><option value="4" selected>4 (default)</option></select>
+        </div>
+        <div><label>Sort</label>
+          <select id="pSort"><option value="last">By last name</option><option value="first">By first name</option></select>
+        </div>
+        <div class="full">
+          <label>Include</label>
+          <div id="pIncludes"></div>
+          <label class="check-inline"><input type="checkbox" id="pFam">Family</label>
+        </div>
+        <div class="full hint">The current search and status filters apply to the printout as well.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="printOverlay">Cancel</button>
+      <button class="btn btn-primary" id="doPrintBtn">Print preview</button>
+    </div>
+  </div>
+</div>
+
+<div id="printArea"></div>
+<script>
+/* =====================================================================
+   ★★★ SETUP: Paste your Firebase config values below.
+   (See Setup Guide, Step 2)
+   ===================================================================== */
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBYg_YnAIiIDbtcyIZfXNo3sEG0cT-KD30",
+  authDomain: "bhpc-directory-dca02.firebaseapp.com",
+  projectId: "bhpc-directory-dca02",
+};
+
+/* Church name (shown in the header) */
+const CHURCH_NAME = "Member Directory";
+const CHURCH_SUB  = "BEAUTIFUL HILL PRESBYTERIAN CHURCH";
+
+/* =====================================================================
+   ★★★ MEMBER FIELDS — add or remove categories here.
+   Each line becomes an input in the form, a row in the detail view,
+   and an option in Print Settings. All fields may be left blank.
+
+   type: "text" | "tel" | "email" | "date" | "select" | "textarea"
+   wide: true  → takes the full width of the form
+   card: true  → shown under the name on the directory card
+   For "select", list the choices in options: [...]
+
+   Example — to add a field later, just add one line:
+   { key:"cellGroup", label:"Cell group", type:"text" },
+   To remove a field, delete its line (existing data is kept, just hidden).
+   ===================================================================== */
+const MEMBER_FIELDS = [
+  { key:"lastName",  label:"Last name",      type:"text" },
+  { key:"firstName", label:"First name",     type:"text" },
+  { key:"phone",     label:"Phone number",   type:"tel",  card:true },
+  { key:"address",   label:"Address",        type:"text", wide:true },
+  { key:"email",     label:"Email address",  type:"email" },
+  { key:"baptized",  label:"Baptized",       type:"select", options:["Yes","No"] },
+  { key:"birthday",  label:"Birthday",       type:"date" },
+  { key:"status",    label:"Current status", type:"select", options:["Active","Inactive","Visitor","Moved"] },
+  { key:"notes",     label:"Note",           type:"textarea", wide:true },
+];
+
+/* Fields checked by default in Print Settings */
+const PRINT_DEFAULT = ["phone","address"];
+
+/* ===================================================================== */
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* Username login: a placeholder domain is appended internally */
+const ID_DOMAIN = "@bhpc.member";
+const toEmail = v => v.includes("@") ? v : v + ID_DOMAIN;
+const toDisplay = v => v.endsWith(ID_DOMAIN) ? v.slice(0, -ID_DOMAIN.length) : v;
+
+const REL_TYPES = ["Spouse","Parent","Child","Sibling","Grandparent","Grandchild","Other"];
+const REL_INVERSE = {"Spouse":"Spouse","Parent":"Child","Child":"Parent","Sibling":"Sibling","Grandparent":"Grandchild","Grandchild":"Grandparent","Other":"Other"};
+
+const fullName = m => [m.firstName, m.lastName].filter(Boolean).join(" ") || m.name || "(No name)";
+const initial  = m => ((m.firstName || m.lastName || m.name || "?").trim()[0] || "?").toUpperCase();
+
+let db, auth, myRole = "viewer", members = [], unsubMembers = null, editingId = null;
+
+$("churchTitle").childNodes[0].nodeValue = CHURCH_NAME;
+$("churchNameEn").textContent = CHURCH_SUB;
+
+/* ---------- init ---------- */
+if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes("PASTE")) {
+  $("setupNote").hidden = false;
+} else {
+  firebase.initializeApp(FIREBASE_CONFIG);
+  auth = firebase.auth();
+  db = firebase.firestore();
+
+  auth.onAuthStateChanged(async user => {
+    if (user) {
+      try {
+        const doc = await db.collection("users").doc(user.uid).get();
+        myRole = doc.exists ? (doc.data().role || "viewer") : "viewer";
+      } catch(e){ myRole = "viewer"; }
+      $("loginScreen").hidden = true;
+      $("app").hidden = false;
+      $("addBtn").hidden = myRole !== "admin";
+      $("accountBtn").hidden = myRole !== "admin";
+      startMembers();
+    } else {
+      if (unsubMembers) { unsubMembers(); unsubMembers = null; }
+      members = [];
+      $("app").hidden = true;
+      $("loginScreen").hidden = false;
+    }
+  });
+}
+
+/* ---------- login / logout ---------- */
+$("loginBtn").onclick = async () => {
+  $("loginMsg").textContent = "";
+  if (!auth) { $("loginMsg").textContent = "Please configure Firebase first."; return; }
+  try {
+    await auth.signInWithEmailAndPassword(toEmail($("loginEmail").value.trim()), $("loginPw").value);
+  } catch(e) {
+    $("loginMsg").textContent = "Sign-in failed. Please check your username and password.";
+  }
+};
+$("loginPw").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
+$("logoutBtn").onclick = () => auth.signOut();
+
+/* ---------- members realtime ---------- */
+function startMembers(){
+  if (unsubMembers) unsubMembers();
+  unsubMembers = db.collection("members").onSnapshot(snap => {
+    members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, err => {
+    $("grid").innerHTML = `<p style="grid-column:1/-1;color:var(--danger)">Could not load data. Please check your access permissions.</p>`;
+  });
+}
+
+/* ---------- filtering & sorting ---------- */
+function currentList(){
+  const q = $("searchBox").value.trim().toLowerCase();
+  const st = $("statusFilter").value;
+  let list = members.filter(m => {
+    if (st && (m.status||"") !== st) return false;
+    if (!q) return true;
+    const hay = MEMBER_FIELDS.map(f => m[f.key]).concat([fullName(m)]).join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+  return sortList(list, $("sortSel").value);
+}
+function sortList(list, mode){
+  const cmp = (x,y) => (x||"").localeCompare(y||"", "en");
+  if (mode === "first") {
+    return [...list].sort((a,b) => cmp(a.firstName,b.firstName) || cmp(a.lastName,b.lastName));
+  }
+  return [...list].sort((a,b) => cmp(a.lastName,b.lastName) || cmp(a.firstName,b.firstName));
+}
+
+/* ---------- render grid ---------- */
+function render(){
+  const statusField = MEMBER_FIELDS.find(f => f.key === "status");
+  if (statusField) {
+    const cur = $("statusFilter").value;
+    const present = statusField.options.filter(o => members.some(m => m.status === o));
+    $("statusFilter").innerHTML = `<option value="">All statuses</option>` +
+      present.map(o => `<option${o===cur?" selected":""}>${esc(o)}</option>`).join("");
+  } else {
+    $("statusFilter").hidden = true;
+  }
+
+  const list = currentList();
+  $("countNote").textContent = `Showing ${list.length} of ${members.length} members`;
+  const cardFields = MEMBER_FIELDS.filter(f => f.card);
+  $("grid").innerHTML = list.map(m => `
+    <div class="mcard" data-id="${m.id}" tabindex="0" role="button" aria-label="View details for ${esc(fullName(m))}">
+      ${m.photo ? `<img class="photo" src="${m.photo}" alt="">` : `<div class="no-photo">${esc(initial(m))}</div>`}
+      <div class="name">${esc(fullName(m))}</div>
+      ${cardFields.map(f => `<div class="meta">${esc(m[f.key] || "　")}</div>`).join("")}
+    </div>`).join("") || `<p style="grid-column:1/-1;color:var(--ink-soft)">No members to display.</p>`;
+}
+["searchBox","statusFilter","sortSel"].forEach(id => $(id).addEventListener("input", render));
+$("grid").addEventListener("click", e => {
+  const card = e.target.closest(".mcard");
+  if (card) openDetail(card.dataset.id);
+});
+$("grid").addEventListener("keydown", e => {
+  const card = e.target.closest(".mcard");
+  if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openDetail(card.dataset.id); }
+});
+
+/* ---------- modal helpers ---------- */
+document.querySelectorAll("[data-close]").forEach(b => b.onclick = () => $(b.dataset.close).hidden = true);
+document.querySelectorAll(".overlay").forEach(ov => ov.addEventListener("click", e => { if (e.target === ov) ov.hidden = true; }));
+function toast(msg){
+  const t = document.createElement("div");
+  t.className = "toast"; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2200);
+}
+
+/* ---------- detail ---------- */
+function openDetail(id){
+  const m = members.find(x => x.id === id);
+  if (!m) return;
+  const rows = MEMBER_FIELDS
+    .filter(f => !["firstName","lastName","notes","status"].includes(f.key))
+    .filter(f => (m[f.key] || "").toString().trim() !== "")
+    .map(f => {
+      let v = esc(m[f.key]);
+      if (f.type === "tel")   v = `<a href="tel:${v}">${v}</a>`;
+      if (f.type === "email") v = `<a href="mailto:${v}">${v}</a>`;
+      return `<div class="row"><span class="k">${esc(f.label)}</span><span>${v}</span></div>`;
+    }).join("");
+  const fam = (m.family || []).map(f => {
+    const t = members.find(x => x.id === f.id);
+    return t ? `<span class="fam-chip" data-id="${t.id}"><b>${esc(fullName(t))}</b><span>${esc(f.rel)}</span></span>` : "";
+  }).join("");
+  $("detailBody").innerHTML = `
+    <div class="detail-top">
+      ${m.photo ? `<img src="${m.photo}" alt="">` : `<div class="no-photo">${esc(initial(m))}</div>`}
+      <div style="flex:1;min-width:200px">
+        <div><span class="detail-name">${esc(fullName(m))}</span>${m.status?`<span class="detail-badge">${esc(m.status)}</span>`:""}</div>
+        <div class="detail-list">${rows}</div>
+      </div>
+    </div>
+    ${fam?`<div class="fam-box"><h3>Family</h3>${fam}</div>`:""}
+    ${m.notes?`<div class="memo-box">${esc(m.notes)}</div>`:""}`;
+  $("detailFoot").innerHTML = myRole === "admin"
+    ? `<button class="btn btn-danger btn-sm" id="delBtn">Delete</button>
+       <button class="btn btn-primary btn-sm" id="editOpenBtn">Edit</button>` : "";
+  if (myRole === "admin") {
+    $("editOpenBtn").onclick = () => { $("detailOverlay").hidden = true; openEdit(id); };
+    $("delBtn").onclick = () => deleteMember(id);
+  }
+  $("detailBody").querySelectorAll(".fam-chip").forEach(c => c.onclick = () => openDetail(c.dataset.id));
+  $("detailOverlay").hidden = false;
+}
+
+/* ---------- photo compression ---------- */
+let editPhotoData = "";
+$("editPhotoFile").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  editPhotoData = await compressImage(file);
+  $("editPhotoPreview").src = editPhotoData;
+});
+$("photoRemoveBtn").onclick = () => { editPhotoData = ""; $("editPhotoPreview").src = ""; $("editPhotoFile").value = ""; };
+function compressImage(file){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 420;
+      let w = img.width, h = img.height;
+      const scale = Math.min(1, MAX / Math.max(w, h));
+      w = Math.round(w * scale); h = Math.round(h * scale);
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      let q = 0.75, data = cv.toDataURL("image/jpeg", q);
+      while (data.length > 200000 && q > 0.35) { q -= 0.1; data = cv.toDataURL("image/jpeg", q); }
+      resolve(data);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/* ---------- edit / add (form built from MEMBER_FIELDS) ---------- */
+$("addBtn").onclick = () => openEdit(null);
+
+function buildForm(m){
+  $("dynFields").innerHTML = MEMBER_FIELDS.map(f => {
+    const v = m[f.key] ?? "";
+    let input;
+    if (f.type === "select") {
+      input = `<select id="fld_${f.key}"><option value=""></option>` +
+        f.options.map(o => `<option${o===v?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
+    } else if (f.type === "textarea") {
+      input = `<textarea id="fld_${f.key}" rows="2">${esc(v)}</textarea>`;
+    } else {
+      input = `<input id="fld_${f.key}" type="${f.type}" value="${esc(v)}">`;
+    }
+    return `<div${f.wide?' class="full"':''}><label for="fld_${f.key}">${esc(f.label)}</label>${input}</div>`;
+  }).join("");
+}
+function readForm(){
+  const data = {};
+  MEMBER_FIELDS.forEach(f => data[f.key] = ($("fld_"+f.key).value || "").trim());
+  return data;
+}
+
+function relRowHTML(rel = "", targetId = ""){
+  const opts = members.filter(m => m.id !== editingId)
+    .sort((a,b)=>fullName(a).localeCompare(fullName(b),"en"))
+    .map(m => `<option value="${m.id}"${m.id===targetId?" selected":""}>${esc(fullName(m))}</option>`).join("");
+  return `<div class="rel-row">
+    <select class="rel-type">${REL_TYPES.map(t=>`<option${t===rel?" selected":""}>${t}</option>`).join("")}</select>
+    <select class="rel-target"><option value="">Select person</option>${opts}</select>
+    <button class="btn btn-sm" type="button" onclick="this.parentElement.remove()">✕</button>
+  </div>`;
+}
+$("relAddBtn").onclick = () => $("relRows").insertAdjacentHTML("beforeend", relRowHTML());
+
+function openEdit(id){
+  editingId = id;
+  const m = id ? members.find(x => x.id === id) : {};
+  $("editTitle").textContent = id ? "Edit Member" : "Add Member";
+  buildForm(m || {});
+  editPhotoData = (m && m.photo) || "";
+  $("editPhotoPreview").src = editPhotoData;
+  $("editPhotoFile").value = "";
+  $("relRows").innerHTML = ((m && m.family) || []).map(f => relRowHTML(f.rel, f.id)).join("");
+  $("editOverlay").hidden = false;
+}
+
+$("saveBtn").onclick = async () => {
+  const data = readForm();
+  if (!data.firstName && !data.lastName) { alert("Please enter at least a first or last name."); return; }
+  const family = [...$("relRows").querySelectorAll(".rel-row")].map(r => ({
+    rel: r.querySelector(".rel-type").value,
+    id: r.querySelector(".rel-target").value
+  })).filter(f => f.id);
+
+  data.photo = editPhotoData;
+  data.family = family;
+  data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+
+  $("saveBtn").disabled = true;
+  try {
+    const batch = db.batch();
+    let myRef;
+    if (editingId) {
+      myRef = db.collection("members").doc(editingId);
+      batch.update(myRef, data);
+    } else {
+      myRef = db.collection("members").doc();
+      batch.set(myRef, { ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    }
+    // apply inverse relation to the other person
+    const oldFam = editingId ? ((members.find(x => x.id === editingId) || {}).family || []) : [];
+    const oldIds = new Set(oldFam.map(f => f.id));
+    const newIds = new Set(family.map(f => f.id));
+    for (const f of family) {
+      const target = members.find(x => x.id === f.id);
+      if (!target) continue;
+      const tFam = (target.family || []).filter(x => x.id !== myRef.id);
+      tFam.push({ id: myRef.id, rel: REL_INVERSE[f.rel] || "Other" });
+      batch.update(db.collection("members").doc(f.id), { family: tFam });
+    }
+    for (const oid of oldIds) {
+      if (newIds.has(oid)) continue;
+      const target = members.find(x => x.id === oid);
+      if (!target) continue;
+      const tFam = (target.family || []).filter(x => x.id !== myRef.id);
+      batch.update(db.collection("members").doc(oid), { family: tFam });
+    }
+    await batch.commit();
+    $("editOverlay").hidden = true;
+    toast(editingId ? "Saved" : "Member added");
+  } catch(e) {
+    alert("Save failed. Please check your admin permissions.");
+  }
+  $("saveBtn").disabled = false;
+};
+
+async function deleteMember(id){
+  const m = members.find(x => x.id === id);
+  if (!m || !confirm(`Remove '${fullName(m)}' from the directory?\nThis cannot be undone.`)) return;
+  try {
+    const batch = db.batch();
+    batch.delete(db.collection("members").doc(id));
+    for (const other of members) {
+      if ((other.family || []).some(f => f.id === id)) {
+        batch.update(db.collection("members").doc(other.id),
+          { family: other.family.filter(f => f.id !== id) });
+      }
+    }
+    await batch.commit();
+    $("detailOverlay").hidden = true;
+    toast("Deleted");
+  } catch(e) { alert("Delete failed."); }
+}
+
+/* ---------- account management (admin) ---------- */
+$("accountBtn").onclick = () => { $("accountOverlay").hidden = false; loadUsers(); };
+async function loadUsers(){
+  const snap = await db.collection("users").get();
+  $("userList").innerHTML = snap.docs.map(d => {
+    const u = d.data();
+    return `<div class="user-row" data-uid="${d.id}">
+      <span class="email">${esc(toDisplay(u.email || ""))}</span>
+      <span class="role-badge ${u.role==='admin'?'role-admin':'role-viewer'}">${u.role==='admin'?'Admin':'View'}</span>
+      <button class="btn btn-sm role-toggle">Change role</button>
+      <button class="btn btn-sm btn-danger doc-remove">Remove</button>
+    </div>`;
+  }).join("") || `<div class="hint">No accounts registered.</div>`;
+  $("userList").querySelectorAll(".role-toggle").forEach(b => b.onclick = async () => {
+    const row = b.closest(".user-row");
+    const uid = row.dataset.uid;
+    const cur = row.querySelector(".role-badge").classList.contains("role-admin") ? "admin" : "viewer";
+    const next = cur === "admin" ? "viewer" : "admin";
+    if (!confirm(`Change this account's role to '${next==='admin'?'Admin':'View only'}'?`)) return;
+    await db.collection("users").doc(uid).update({ role: next });
+    loadUsers();
+  });
+  $("userList").querySelectorAll(".doc-remove").forEach(b => b.onclick = async () => {
+    const row = b.closest(".user-row");
+    if (!confirm("Remove this account from the role list?\n(Delete the user in the Firebase Console first to fully block sign-in)")) return;
+    await db.collection("users").doc(row.dataset.uid).delete();
+    loadUsers();
+  });
+}
+$("createAccBtn").onclick = async () => {
+  const rawId = $("newAccEmail").value.trim();
+  const pw = $("newAccPw").value;
+  const role = $("newAccRole").value;
+  $("accMsg").textContent = "";
+  if (!rawId || pw.length < 6) { $("accMsg").textContent = "Please enter a username and a password of at least 6 characters."; return; }
+  if (!rawId.includes("@") && !/^[a-zA-Z0-9._-]+$/.test(rawId)) {
+    $("accMsg").textContent = "Usernames may only contain letters, numbers, dots, hyphens, and underscores."; return;
+  }
+  const email = toEmail(rawId);
+  $("createAccBtn").disabled = true;
+  try {
+    // create the account via a secondary app so the admin stays signed in
+    let secondary = firebase.apps.find(a => a.name === "secondary")
+      || firebase.initializeApp(FIREBASE_CONFIG, "secondary");
+    const cred = await secondary.auth().createUserWithEmailAndPassword(email, pw);
+    await db.collection("users").doc(cred.user.uid).set({ email, role, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
+    await secondary.auth().signOut();
+    $("newAccEmail").value = ""; $("newAccPw").value = "";
+    $("accMsg").textContent = `✓ Account '${toDisplay(email)}' created. Share the username and initial password with the member.`;
+    loadUsers();
+  } catch(e) {
+    $("accMsg").textContent = e.code === "auth/email-already-in-use"
+      ? "This username is already in use." : "Account creation failed: " + (e.message || "");
+  }
+  $("createAccBtn").disabled = false;
+};
+
+/* ---------- print ---------- */
+$("printOpenBtn").onclick = () => {
+  // build Include checkboxes from MEMBER_FIELDS (name & notes excluded)
+  $("pIncludes").innerHTML = MEMBER_FIELDS
+    .filter(f => !["firstName","lastName","notes"].includes(f.key))
+    .map(f => `<label class="check-inline"><input type="checkbox" data-pkey="${f.key}"${PRINT_DEFAULT.includes(f.key)?" checked":""}>${esc(f.label)}</label>`)
+    .join("");
+  $("printOverlay").hidden = false;
+};
+$("doPrintBtn").onclick = () => {
+  const list = sortList(currentList(), $("pSort").value);
+  const cols = $("pCols").value;
+  const incl = [...$("pIncludes").querySelectorAll("input:checked")].map(c => c.dataset.pkey);
+  const showFam = $("pFam").checked;
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+  $("printArea").innerHTML = `
+    <div class="print-title">${esc($("pTitle").value)}</div>
+    <div class="print-sub">${dateStr} · ${list.length} members</div>
+    <div class="print-rule"></div>
+    <div class="print-grid cols-${cols}">
+      ${list.map(m => {
+        const lines = incl.map(k => {
+          const f = MEMBER_FIELDS.find(x => x.key === k);
+          const v = (m[k] || "").toString().trim();
+          if (!v) return "";
+          return (f.type === "select" || f.type === "date") ? `${esc(f.label)}: ${esc(v)}` : esc(v);
+        }).filter(Boolean);
+        if (showFam) {
+          const famStr = (m.family||[]).map(f => {
+            const t = members.find(x => x.id === f.id);
+            return t ? `${esc(f.rel)} ${esc(fullName(t))}` : "";
+          }).filter(Boolean).join(" · ");
+          if (famStr) lines.push(famStr);
+        }
+        return `<div class="pcard">
+          ${m.photo ? `<img src="${m.photo}" alt="">` : `<div class="pnp">${esc(initial(m))}</div>`}
+          <div class="pname">${esc(fullName(m))}</div>
+          <div class="pinfo">${lines.join("<br>")}</div>
+        </div>`;
+      }).join("")}
+    </div>`;
+  $("printOverlay").hidden = true;
+  setTimeout(() => window.print(), 150);
+};
+</script>
+</body>
+</html>
