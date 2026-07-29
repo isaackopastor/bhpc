@@ -92,6 +92,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 .mcard .photo{width:100%;aspect-ratio:3/3.4;object-fit:cover;border-radius:6px;background:#EDEAE0;display:block}
 .mcard .no-photo{width:100%;aspect-ratio:3/3.4;border-radius:6px;background:#EDEAE0;display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:34px;color:#B9B29F}
 .mcard .name{font-family:var(--font-serif);font-size:17.5px;font-weight:700;margin-top:9px;color:var(--pine-deep)}
+.mcard .name .kname{font-size:14.5px;font-weight:400;color:var(--ink-soft)}
 .mcard .meta{font-size:12.5px;color:var(--ink-soft);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ---------- modal ---------- */
@@ -578,12 +579,13 @@ function cityOf(addr){
 }
 function memberCardHTML(m){
   const nameLF = [m.lastName, m.firstName].filter(Boolean).join(" ") || fullName(m);
+  const kn = m.koreanName ? ` <span class="kname">${esc(m.koreanName)}</span>` : "";
   const bd = /^\d{4}-\d{2}-\d{2}/.test(m.birthday||"")
     ? new Date(m.birthday+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "";
   return `
     <div class="mcard" data-id="${m.id}" tabindex="0" role="button" aria-label="View details for ${esc(fullName(m))}">
       ${m.photo ? `<img class="photo" src="${m.photo}" alt="">` : `<div class="no-photo">${esc(initial(m))}</div>`}
-      <div class="name">${esc(nameLF)}</div>
+      <div class="name">${esc(nameLF)}${kn}</div>
       <div class="meta">${esc(m.phone || "　")}</div>
       <div class="meta">${bd ? "🎂 " + bd : "　"}</div>
       <div class="meta">${esc(cityOf(m.address) || "　")}</div>
