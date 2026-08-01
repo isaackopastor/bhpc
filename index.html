@@ -156,6 +156,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 .field-row .fr-label[readonly]{background:#F3F0E7;color:var(--ink-soft)}
 .field-row .fr-type{width:auto}
 .field-row .fr-options{flex-basis:100%}
+.field-row .fr-filterwrap{flex-basis:100%;font-size:12.5px;color:var(--ink-soft);margin:0}
 .field-row .btn-danger{align-self:center}
 
 /* ---------- print ---------- */
@@ -217,8 +218,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 
   <div class="toolbar">
     <input type="search" id="searchBox" placeholder="Search name, phone, or address">
-    <select id="statusFilter"><option value="">All statuses</option></select>
-    <select id="deptFilter"><option value="">All departments</option></select>
+    <span id="dynFilters" style="display:contents"></span>
     <select id="monthFilter">
       <option value="">All birthdays</option>
       <option value="1">January</option><option value="2">February</option><option value="3">March</option>
@@ -231,10 +231,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       <option value="first">By first name</option>
       <option value="bday">By birthday (month/day)</option>
     </select>
-    <select id="groupSel">
-      <option value="">No grouping</option>
-      <option value="dept">Group by department</option>
-    </select>
+    <select id="groupSel"><option value="">No grouping</option></select>
     <button class="btn btn-sm" id="deptMgrBtn" hidden>⚙ Departments</button>
     <span class="count-note" id="countNote"></span>
   </div>
@@ -470,9 +467,9 @@ const DEFAULT_FIELDS = [
   { key:"baptized",  label:"Baptized",       type:"select", options:["Yes","No"] },
   { key:"birthday",  label:"Birthday",       type:"date" },
   { key:"joined",    label:"Date joined",    type:"date" },
-  { key:"department",label:"Department",     type:"select", options:["Worship","Education","Youth","Children","Missions","Administration"] },
+  { key:"department",label:"Department",     type:"select", options:["Worship","Education","Youth","Children","Missions","Administration"], filter:true },
   { key:"smallGroup",label:"Small group",    type:"text" },
-  { key:"status",    label:"Current status", type:"select", options:["Active","Inactive","Visitor","Moved"] },
+  { key:"status",    label:"Current status", type:"select", options:["Active","Inactive","Visitor","Moved"], filter:true },
   { key:"notes",     label:"Note",           type:"textarea", wide:true },
 ];
 let MEMBER_FIELDS = DEFAULT_FIELDS;
@@ -560,14 +557,13 @@ function startMembers(){
 /* ---------- filtering & sorting ---------- */
 const bdayMonth = m => { const b = m.birthday || ""; return /^\d{4}-\d{2}-\d{2}/.test(b) ? parseInt(b.slice(5,7),10) : null; };
 const bdayMD = m => { const b = m.birthday || ""; return /^\d{4}-\d{2}-\d{2}/.test(b) ? b.slice(5) : "99-99"; };
+const filterState = {};   // { fieldKey: selectedValue }
 function currentList(){
   const q = $("searchBox").value.trim().toLowerCase();
-  const st = $("statusFilter").value;
-  const dept = $("deptFilter").value;
   const mon = $("monthFilter").value;
+  const active = MEMBER_FIELDS.filter(f => f.filter && filterState[f.key]);
   let list = members.filter(m => {
-    if (st && (m.status||"") !== st) return false;
-    if (dept && (m.department||"") !== dept) return false;
+    for (const f of active) if ((m[f.key]||"") !== filterState[f.key]) return false;
     if (mon && bdayMonth(m) !== parseInt(mon,10)) return false;
     if (!q) return true;
     const hay = MEMBER_FIELDS.map(f => m[f.key]).concat([fullName(m)]).join(" ").toLowerCase();
@@ -587,17 +583,6 @@ function sortList(list, mode){
 }
 
 /* ---------- render grid ---------- */
-function fillSelectFilter(elId, fieldKey, allLabel){
-  const field = MEMBER_FIELDS.find(f => f.key === fieldKey);
-  const el = $(elId);
-  if (!field) { el.hidden = true; return null; }
-  el.hidden = false;
-  const cur = el.value;
-  const opts = (field.options || []).filter(o => members.some(m => m[fieldKey] === o));
-  members.forEach(m => { const v = m[fieldKey]; if (v && !opts.includes(v)) opts.push(v); });
-  el.innerHTML = `<option value="">${allLabel}</option>` + opts.map(o => `<option${o===cur?" selected":""}>${esc(o)}</option>`).join("");
-  return field;
-}
 function cityOf(addr){
   if (!addr) return "";
   const parts = addr.split(",").map(s => s.trim()).filter(Boolean);
@@ -605,6 +590,30 @@ function cityOf(addr){
   if (parts.length === 1) return parts[0];
   if (parts.length === 2) return isStateZip(parts[1]) ? parts[0] : parts[1];
   return isStateZip(parts[parts.length-1]) ? parts[parts.length-2] : parts[parts.length-1];
+}
+function optionsFor(key){
+  const f = MEMBER_FIELDS.find(x => x.key === key);
+  const opts = [...((f && f.options) || [])];
+  members.forEach(m => { const v = m[key]; if (v && !opts.includes(v)) opts.push(v); });
+  return opts;
+}
+function renderFilters(){
+  const fields = MEMBER_FIELDS.filter(f => f.filter);
+  Object.keys(filterState).forEach(k => { if (!fields.some(f => f.key === k)) delete filterState[k]; });
+  $("dynFilters").innerHTML = fields.map(f => {
+    const cur = filterState[f.key] || "";
+    return `<select data-fk="${f.key}"><option value="">All ${esc(f.label.toLowerCase())}</option>` +
+      optionsFor(f.key).map(o => `<option${o===cur?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
+  }).join("");
+  $("dynFilters").querySelectorAll("select").forEach(sel => sel.onchange = () => {
+    filterState[sel.dataset.fk] = sel.value;
+    render();
+  });
+
+  const groupable = MEMBER_FIELDS.filter(f => f.type === "select");
+  const curG = $("groupSel").value;
+  $("groupSel").innerHTML = `<option value="">No grouping</option>` +
+    groupable.map(f => `<option value="${f.key}"${f.key===curG?" selected":""}>Group by ${esc(f.label.toLowerCase())}</option>`).join("");
 }
 function memberCardHTML(m){
   const nameLF = [m.lastName, m.firstName].filter(Boolean).join(" ") || fullName(m);
@@ -621,21 +630,20 @@ function memberCardHTML(m){
     </div>`;
 }
 function render(){
-  fillSelectFilter("statusFilter", "status", "All statuses");
-  const deptField = fillSelectFilter("deptFilter", "department", "All departments");
+  renderFilters();
 
   const list = currentList();
   $("countNote").textContent = `Showing ${list.length} of ${members.length} members`;
 
+  const gKey = $("groupSel").value;
+  const gField = MEMBER_FIELDS.find(f => f.key === gKey);
   let html;
-  if ($("groupSel").value === "dept" && deptField) {
-    const order = [...(deptField.options || [])];
-    members.forEach(m => { const v = m.department; if (v && !order.includes(v)) order.push(v); });
-    order.push("");
-    html = order.map(dep => {
-      const group = list.filter(m => (m.department||"") === dep);
+  if (gField) {
+    const order = [...optionsFor(gKey), ""];
+    html = order.map(val => {
+      const group = list.filter(m => (m[gKey]||"") === val);
       if (!group.length) return "";
-      return `<h2 class="grid-sec">${dep ? esc(dep) : "No department"} <span>${group.length}</span></h2>`
+      return `<h2 class="grid-sec">${val ? esc(val) : "No " + esc(gField.label.toLowerCase())} <span>${group.length}</span></h2>`
         + group.map(m => memberCardHTML(m)).join("");
     }).join("");
   } else {
@@ -643,7 +651,7 @@ function render(){
   }
   $("grid").innerHTML = html || `<p style="grid-column:1/-1;color:var(--ink-soft)">No members to display.</p>`;
 }
-["searchBox","statusFilter","deptFilter","monthFilter","sortSel","groupSel"].forEach(id => $(id).addEventListener("input", render));
+["searchBox","monthFilter","sortSel","groupSel"].forEach(id => $(id).addEventListener("input", render));
 $("grid").addEventListener("click", e => {
   const card = e.target.closest(".mcard");
   if (card) openDetail(card.dataset.id);
@@ -1026,7 +1034,8 @@ function renderFieldRows(){
             .map(([v,l])=>`<option value="${v}"${f.type===v?" selected":""}>${l}</option>`).join("")}
         </select>
         ${f.type==="select"
-          ? `<input class="fr-options" placeholder="Options, separated by commas" value="${esc((f.options||[]).join(", "))}">`
+          ? `<input class="fr-options" placeholder="Options, separated by commas" value="${esc((f.options||[]).join(", "))}">
+             <label class="check-inline fr-filterwrap"><input type="checkbox" class="fr-filter"${f.filter?" checked":""}>Show as filter on the main screen</label>`
           : ``}
       </div>
       ${f.locked
@@ -1050,8 +1059,13 @@ function renderFieldRows(){
     row.querySelector(".fr-type").onchange = e => {
       draftFields[i].type = e.target.value;
       if (e.target.value === "select" && !draftFields[i].options) draftFields[i].options = [];
+      if (e.target.value !== "select") delete draftFields[i].filter;
       draftFields[i].wide = e.target.value === "textarea";
       renderFieldRows();
+    };
+    const fil = row.querySelector(".fr-filter");
+    if (fil) fil.onchange = e => {
+      if (e.target.checked) draftFields[i].filter = true; else delete draftFields[i].filter;
     };
     const opt = row.querySelector(".fr-options");
     if (opt) opt.oninput = e => {
