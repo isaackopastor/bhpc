@@ -68,6 +68,12 @@ table.dash th{background:var(--paper);text-align:left;padding:10px 12px;font-siz
 table.dash td{padding:9px 12px;border-bottom:1px solid #EFEBE0;white-space:nowrap}
 table.dash tr:hover td{background:#FBF9F2;cursor:pointer}
 .mname{font-weight:700;color:var(--pine-deep)}
+tr.sec-row td{background:var(--gold-soft);border-bottom:1px solid #E2D5AE;font-family:var(--font-serif);font-weight:700;color:var(--pine-deep);font-size:14px;cursor:default}
+tr.sec-row:hover td{background:var(--gold-soft)}
+tr.sec-row td .cnt{font-family:var(--font-body);font-weight:400;font-size:12.5px;color:var(--ink-soft);margin-left:8px}
+.d-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F0ECE1}
+.d-item .nm{flex:1}
+.d-item .use{font-size:12.5px;color:var(--ink-soft)}
 .pill{display:inline-block;border-radius:12px;padding:1px 9px;font-size:12px;font-weight:700}
 .p-ok{background:#E4EFE7;color:var(--ok)}
 .p-amber{background:#F5EAD3;color:var(--amber)}
@@ -146,6 +152,8 @@ table.dash tr:hover td{background:#FBF9F2;cursor:pointer}
     <section id="tab-dash">
       <div class="dash-tools">
         <input type="search" id="dashSearch" placeholder="Search name">
+        <select id="dashDept"><option value="">All departments</option></select>
+        <select id="dashStatus"><option value="">All statuses</option></select>
         <select id="dashSort">
           <option value="name">Sort: Name</option>
           <option value="contact">Sort: Longest since contact</option>
@@ -153,6 +161,7 @@ table.dash tr:hover td{background:#FBF9F2;cursor:pointer}
           <option value="prayer">Sort: Oldest prayer update</option>
           <option value="service">Sort: Longest since service prayer</option>
         </select>
+        <button class="btn btn-sm" id="deptMgrBtn">⚙ Departments</button>
       </div>
       <div class="tbl-wrap">
         <table class="dash">
@@ -173,6 +182,7 @@ table.dash tr:hover td{background:#FBF9F2;cursor:pointer}
         <button class="btn btn-sm" id="attPrev">← Prev</button>
         <button class="btn btn-sm" id="attNext">Next →</button>
         <button class="btn btn-primary btn-sm" id="attSave">Save</button>
+        <select id="attDept"><option value="">All departments</option></select>
         <span class="att-sum" id="attSum"></span>
       </div>
       <div class="att-grid" id="attGrid"></div>
@@ -186,6 +196,27 @@ table.dash tr:hover td{background:#FBF9F2;cursor:pointer}
     <p>This page is for pastoral use only. Your account does not have pastor access.</p>
     <p style="margin-top:14px"><a href="index.html">Go to the Member Directory →</a></p>
     <p style="margin-top:14px"><button class="btn btn-sm" id="deniedLogout">Log out</button></p>
+  </div>
+</div>
+
+<!-- department manager -->
+<div class="overlay" id="dOverlay" hidden>
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <h2>Departments</h2>
+      <button class="x-btn" id="dClose" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="stat" style="font-size:13px;color:var(--ink-soft);margin-bottom:12px">
+        This list is shared with the Member Directory. Removing a department here hides it from the
+        dropdowns; members already assigned to it keep their value until you change it.
+      </p>
+      <div id="dList"></div>
+      <div class="addline" style="margin-top:14px">
+        <input class="grow" id="dNew" placeholder="New department name">
+        <button class="btn btn-primary btn-sm" id="dAdd">Add</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -253,7 +284,22 @@ const auth = firebase.auth();
 const db = firebase.firestore();
 
 let members = [], contacts = [], prayers = [], services = [], attDocs = {};
+let fieldConfig = [];
 let unsubs = [];
+
+/* options for a shared Directory field, plus any values already used by members */
+function optionsFor(key){
+  const f = fieldConfig.find(x => x.key === key);
+  const opts = [...((f && f.options) || [])];
+  members.forEach(m => { const v = m[key]; if (v && !opts.includes(v)) opts.push(v); });
+  return opts;
+}
+function fillSelect(elId, key, allLabel){
+  const el = $(elId);
+  const cur = el.value;
+  el.innerHTML = `<option value="">${allLabel}</option>` +
+    optionsFor(key).map(o => `<option${o===cur?" selected":""}>${esc(o)}</option>`).join("");
+}
 
 /* ---------- auth ---------- */
 $("loginBtn").onclick = async () => {
@@ -289,6 +335,10 @@ function startData(){
       .sort((a,b)=>(a.lastName||"").localeCompare(b.lastName||"","en") || (a.firstName||"").localeCompare(b.firstName||"","en"));
     renderAll();
   }));
+  unsubs.push(db.collection("config").doc("fields").onSnapshot(d => {
+    fieldConfig = (d.exists && Array.isArray(d.data().fields)) ? d.data().fields : [];
+    renderAll();
+  }, () => { fieldConfig = []; }));
   unsubs.push(db.collection("contacts").onSnapshot(s => { contacts = s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }));
   unsubs.push(db.collection("prayers").onSnapshot(s => { prayers = s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }));
   unsubs.push(db.collection("servicePrayers").onSnapshot(s => { services = s.docs.map(d=>({id:d.id,...d.data()})); renderAll(); }));
@@ -324,10 +374,19 @@ document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
 
 /* ---------- dashboard ---------- */
 function renderAll(){ renderDash(); renderAttGrid(); }
-["dashSearch","dashSort"].forEach(id => $(id).addEventListener("input", renderDash));
+["dashSearch","dashSort","dashDept","dashStatus"].forEach(id => $(id).addEventListener("input", renderDash));
 function renderDash(){
+  fillSelect("dashDept", "department", "All departments");
+  fillSelect("dashStatus", "status", "All statuses");
+  fillSelect("attDept", "department", "All departments");
+
   const q = $("dashSearch").value.trim().toLowerCase();
-  let list = members.filter(m => !q || (fullName(m)+" "+(m.koreanName||"")).toLowerCase().includes(q));
+  const fDept = $("dashDept").value, fStat = $("dashStatus").value;
+  let list = members.filter(m => {
+    if (fDept && (m.department||"") !== fDept) return false;
+    if (fStat && (m.status||"") !== fStat) return false;
+    return !q || (fullName(m)+" "+(m.koreanName||"")).toLowerCase().includes(q);
+  });
   const stat = m => ({
     c: latest(contacts, m.id), p: latest(prayers, m.id), s: latest(services, m.id),
     a: attendPct(m.id),
@@ -340,7 +399,7 @@ function renderDash(){
   if (sortMode==="prayer")  list.sort((a,b)=>((cached.get(a.id).p||{}).date||far).localeCompare((cached.get(b.id).p||{}).date||far));
   if (sortMode==="service") list.sort((a,b)=>((cached.get(a.id).s||{}).date||far).localeCompare((cached.get(b.id).s||{}).date||far));
   if (sortMode==="attend")  list.sort((a,b)=>((cached.get(a.id).a??-1)-(cached.get(b.id).a??-1)));
-  $("dashBody").innerHTML = list.map(m => {
+  const rowHTML = m => {
     const st = cached.get(m.id);
     const att = st.a===null ? `<span class="pill p-none">no data</span>`
       : `<span class="pill ${st.a>=75?"p-ok":st.a>=50?"p-amber":"p-bad"}">${st.a}%</span>`;
@@ -351,8 +410,26 @@ function renderDash(){
       <td>${pill(st.p && st.p.date, 30, 60)}</td>
       <td>${st.s ? `${pill(st.s.date, 90, 180)} <span style="color:var(--ink-soft);font-size:12px">×${st.sCount}</span>` : `<span class="pill p-none">never</span>`}</td>
     </tr>`;
-  }).join("");
-  $("dashBody").querySelectorAll("tr").forEach(tr => tr.onclick = () => openMember(tr.dataset.id));
+  };
+  const secHTML = (label, group) => {
+    const pcts = group.map(m => cached.get(m.id).a).filter(v => v !== null);
+    const avg = pcts.length ? Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) : null;
+    return `<tr class="sec-row"><td colspan="5">${esc(label)}<span class="cnt">${group.length} member${group.length===1?"":"s"}${avg!==null?` · avg attendance ${avg}%`:""}</span></td></tr>`;
+  };
+
+  let html;
+  if (fDept) {
+    html = list.map(rowHTML).join("");
+  } else {
+    const order = [...optionsFor("department"), ""];
+    html = order.map(dep => {
+      const group = list.filter(m => (m.department||"") === dep);
+      if (!group.length) return "";
+      return secHTML(dep || "No department", group) + group.map(rowHTML).join("");
+    }).join("");
+  }
+  $("dashBody").innerHTML = html || `<tr><td colspan="5" style="color:var(--ink-soft)">No members to display.</td></tr>`;
+  $("dashBody").querySelectorAll("tr[data-id]").forEach(tr => tr.onclick = () => openMember(tr.dataset.id));
 }
 
 /* ---------- attendance ---------- */
@@ -368,18 +445,27 @@ async function loadAttendance(){
 function renderAttGrid(){
   const d = $("attDate").value;
   if (!d) return;
-  $("attGrid").innerHTML = members.map(m => `
+  const fd = $("attDept").value;
+  const shown = members.filter(m => !fd || (m.department||"") === fd);
+  $("attGrid").innerHTML = shown.map(m => `
     <label class="att-item ${attPresent.has(m.id)?"on":""}">
       <input type="checkbox" data-id="${m.id}" ${attPresent.has(m.id)?"checked":""}>
       <span>${esc(fullName(m))}</span>
     </label>`).join("");
-  $("attSum").textContent = `${attPresent.size} / ${members.length} present`;
+  const sum = () => {
+    const inView = shown.filter(m => attPresent.has(m.id)).length;
+    $("attSum").textContent = fd
+      ? `${inView} / ${shown.length} present in ${fd} · ${attPresent.size} total`
+      : `${attPresent.size} / ${members.length} present`;
+  };
+  sum();
   $("attGrid").querySelectorAll("input").forEach(cb => cb.onchange = () => {
     cb.checked ? attPresent.add(cb.dataset.id) : attPresent.delete(cb.dataset.id);
     cb.closest(".att-item").classList.toggle("on", cb.checked);
-    $("attSum").textContent = `${attPresent.size} / ${members.length} present`;
+    sum();
   });
 }
+$("attDept").addEventListener("change", renderAttGrid);
 $("attSave").onclick = async () => {
   const d = $("attDate").value;
   if (!d) return;
@@ -388,6 +474,66 @@ $("attSave").onclick = async () => {
     toast(`Attendance saved for ${d}`);
   } catch(e){ alert("Save failed. Check that your account has pastor access and the rules are updated."); }
 };
+
+/* ---------- department manager (writes to the shared Directory field config) ---------- */
+$("deptMgrBtn").onclick = () => { renderDeptMgr(); $("dOverlay").hidden = false; };
+$("dClose").onclick = () => $("dOverlay").hidden = true;
+$("dOverlay").addEventListener("click", e => { if (e.target === $("dOverlay")) $("dOverlay").hidden = true; });
+
+function deptListNow(){
+  const f = fieldConfig.find(x => x.key === "department");
+  return [...((f && f.options) || [])];
+}
+function renderDeptMgr(){
+  const opts = deptListNow();
+  const extra = optionsFor("department").filter(o => !opts.includes(o));
+  $("dList").innerHTML = (opts.map(o => {
+    const n = members.filter(m => m.department === o).length;
+    return `<div class="d-item"><span class="nm">${esc(o)}</span>
+      <span class="use">${n} member${n===1?"":"s"}</span>
+      <button class="btn btn-sm btn-danger d-del" data-name="${esc(o)}">✕</button></div>`;
+  }).join("") || `<p class="use">No departments defined yet.</p>`)
+  + extra.map(o => {
+    const n = members.filter(m => m.department === o).length;
+    return `<div class="d-item"><span class="nm">${esc(o)}</span>
+      <span class="use">${n} member${n===1?"":"s"} · not in list</span>
+      <button class="btn btn-sm d-add-existing" data-name="${esc(o)}">Add to list</button></div>`;
+  }).join("");
+
+  $("dList").querySelectorAll(".d-del").forEach(b => b.onclick = () => {
+    const name = b.dataset.name;
+    const n = members.filter(m => m.department === name).length;
+    if (!confirm(`Remove '${name}' from the department list?` + (n ? `\n${n} member(s) still have this value and will show under it until changed.` : ""))) return;
+    saveDepts(deptListNow().filter(o => o !== name));
+  });
+  $("dList").querySelectorAll(".d-add-existing").forEach(b => b.onclick = () => saveDepts([...deptListNow(), b.dataset.name]));
+}
+$("dAdd").onclick = () => {
+  const v = $("dNew").value.trim();
+  if (!v) { alert("Please enter a department name."); return; }
+  if (deptListNow().some(o => o.toLowerCase() === v.toLowerCase())) { alert("That department already exists."); return; }
+  $("dNew").value = "";
+  saveDepts([...deptListNow(), v]);
+};
+$("dNew").addEventListener("keydown", e => { if (e.key === "Enter") $("dAdd").click(); });
+
+async function saveDepts(newOptions){
+  if (!fieldConfig.length) {
+    alert("Open the Member Directory first, click ⚙ Fields and press 'Save fields' once.\nThat creates the shared field list this screen edits.");
+    return;
+  }
+  const fields = JSON.parse(JSON.stringify(fieldConfig));
+  const i = fields.findIndex(f => f.key === "department");
+  if (i >= 0) fields[i].options = newOptions;
+  else fields.push({ key:"department", label:"Department", type:"select", options:newOptions });
+  try {
+    await db.collection("config").doc("fields").set({ fields });
+    toast("Departments updated");
+    setTimeout(renderDeptMgr, 300);
+  } catch(e) {
+    alert("Could not save. Editing departments requires an admin account, since this list is shared with the Directory.");
+  }
+}
 
 /* ---------- member panel ---------- */
 let curId = null;

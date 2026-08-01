@@ -145,6 +145,9 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 .check-inline input{width:auto}
 
 /* fields manager */
+.d-item{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #F0ECE1}
+.d-item .nm{flex:1;font-weight:600}
+.d-item .use{font-size:12.5px;color:var(--ink-soft);font-weight:400}
 .field-row{display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--line)}
 .field-row .fr-move{display:flex;flex-direction:column;gap:3px}
 .field-row .fr-move .btn{padding:1px 7px;font-size:12px}
@@ -232,6 +235,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       <option value="">No grouping</option>
       <option value="dept">Group by department</option>
     </select>
+    <button class="btn btn-sm" id="deptMgrBtn" hidden>⚙ Departments</button>
     <span class="count-note" id="countNote"></span>
   </div>
 
@@ -348,6 +352,30 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
     <div class="modal-foot">
       <button class="btn" data-close="printOverlay">Cancel</button>
       <button class="btn btn-primary" id="doPrintBtn">Print preview</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== Departments ===================== -->
+<div class="overlay" id="dOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:440px">
+    <div class="modal-head">
+      <h2>Departments</h2>
+      <button class="x-btn" data-close="dOverlay" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <p class="hint" style="margin-bottom:12px">
+        Shared with the Pastoral Care page. Removing a department hides it from the dropdowns;
+        members already assigned to it keep their value until you change it.
+      </p>
+      <div id="dList"></div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <input id="dNew" placeholder="New department name" style="flex:1">
+        <button class="btn btn-primary" id="dAdd" type="button">Add</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="dOverlay">Done</button>
     </div>
   </div>
 </div>
@@ -492,6 +520,7 @@ if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes("PASTE")) {
       $("addBtn").hidden = myRole !== "admin";
       $("importBtn").hidden = myRole !== "admin";
       $("fieldsBtn").hidden = myRole !== "admin";
+      $("deptMgrBtn").hidden = myRole !== "admin";
       $("accountBtn").hidden = myRole !== "admin";
       startFieldConfig();
       startMembers();
@@ -898,6 +927,63 @@ $("createAccBtn").onclick = async () => {
   }
   $("createAccBtn").disabled = false;
 };
+
+/* ---------- department quick manager ---------- */
+$("deptMgrBtn").onclick = () => { renderDeptMgr(); $("dOverlay").hidden = false; };
+function deptListNow(){
+  const f = MEMBER_FIELDS.find(x => x.key === "department");
+  return [...((f && f.options) || [])];
+}
+function deptsInUse(){
+  const used = [];
+  members.forEach(m => { const v = m.department; if (v && !used.includes(v)) used.push(v); });
+  return used;
+}
+function renderDeptMgr(){
+  const opts = deptListNow();
+  const extra = deptsInUse().filter(o => !opts.includes(o));
+  $("dList").innerHTML = (opts.map(o => {
+    const n = members.filter(m => m.department === o).length;
+    return `<div class="d-item"><span class="nm">${esc(o)}</span>
+      <span class="use">${n} member${n===1?"":"s"}</span>
+      <button class="btn btn-sm btn-danger d-del" data-name="${esc(o)}" type="button">✕</button></div>`;
+  }).join("") || `<p class="hint">No departments defined yet.</p>`)
+  + extra.map(o => {
+    const n = members.filter(m => m.department === o).length;
+    return `<div class="d-item"><span class="nm">${esc(o)}</span>
+      <span class="use">${n} member${n===1?"":"s"} · not in list</span>
+      <button class="btn btn-sm d-add-existing" data-name="${esc(o)}" type="button">Add to list</button></div>`;
+  }).join("");
+
+  $("dList").querySelectorAll(".d-del").forEach(b => b.onclick = () => {
+    const name = b.dataset.name;
+    const n = members.filter(m => m.department === name).length;
+    if (!confirm(`Remove '${name}' from the department list?` + (n ? `\n${n} member(s) still have this value and will show under it until changed.` : ""))) return;
+    saveDepts(deptListNow().filter(o => o !== name));
+  });
+  $("dList").querySelectorAll(".d-add-existing").forEach(b => b.onclick = () => saveDepts([...deptListNow(), b.dataset.name]));
+}
+$("dAdd").onclick = () => {
+  const v = $("dNew").value.trim();
+  if (!v) { alert("Please enter a department name."); return; }
+  if (deptListNow().some(o => o.toLowerCase() === v.toLowerCase())) { alert("That department already exists."); return; }
+  $("dNew").value = "";
+  saveDepts([...deptListNow(), v]);
+};
+$("dNew").addEventListener("keydown", e => { if (e.key === "Enter") $("dAdd").click(); });
+async function saveDepts(newOptions){
+  const fields = JSON.parse(JSON.stringify(MEMBER_FIELDS));
+  const i = fields.findIndex(f => f.key === "department");
+  if (i >= 0) { fields[i].options = newOptions; fields[i].type = "select"; }
+  else fields.push({ key:"department", label:"Department", type:"select", options:newOptions });
+  try {
+    await db.collection("config").doc("fields").set({ fields });
+    toast("Departments updated");
+    setTimeout(renderDeptMgr, 300);
+  } catch(e) {
+    alert("Could not save. Make sure the security rules include the 'config' section.");
+  }
+}
 
 /* ---------- field configuration (stored in Firestore, editable in-app) ---------- */
 let unsubFields = null;
