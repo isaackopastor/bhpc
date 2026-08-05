@@ -58,8 +58,8 @@ input:focus,select:focus,textarea:focus{outline:2px solid var(--pine);outline-of
 #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;
   background:linear-gradient(180deg,var(--paper) 0%, #F1EDE0 100%)}
 .login-card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:38px 34px;width:100%;max-width:400px;text-align:center}
-.login-card .book-title{font-family:var(--font-serif);font-size:25px;font-weight:700;color:var(--pine-deep);letter-spacing:.02em;line-height:1.3;margin-bottom:6px}
-.login-card .book-sub{font-size:13px;color:var(--ink-soft);letter-spacing:.28em;margin-bottom:26px}
+.login-card .book-title{font-family:var(--font-serif);font-size:27px;font-weight:700;color:var(--pine-deep);letter-spacing:.02em;line-height:1.3;margin-bottom:6px}
+.login-card .book-sub{font-family:var(--font-serif);font-size:15px;color:var(--ink-soft);letter-spacing:.18em;margin-bottom:26px}
 .login-card .rule{height:3px;border-top:1px solid var(--gold);border-bottom:1px solid var(--gold);width:56px;margin:0 auto 26px}
 .login-card label{display:block;text-align:left;font-size:13px;font-weight:600;color:var(--ink-soft);margin:12px 0 5px}
 .login-card .btn{width:100%;justify-content:center;margin-top:20px;padding:12px}
@@ -136,6 +136,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 /* account manager */
 .user-row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line);font-size:14px;flex-wrap:wrap}
 .user-row .email{flex:1;min-width:160px;word-break:break-all}
+.user-row .use{font-size:12.5px;color:var(--ink-soft);flex-basis:100%;order:9}
 .role-badge{font-size:12px;border-radius:12px;padding:2px 10px;font-weight:700}
 .role-admin{background:var(--pine);color:#fff}
 .role-viewer{background:var(--gold-soft);color:var(--gold)}
@@ -185,14 +186,14 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 <!-- ===================== Login screen ===================== -->
 <div id="loginScreen">
   <div class="login-card">
-    <div class="book-title">Beautiful Hill<br>Presbyterian Church</div>
-    <div class="book-sub">MEMBER DIRECTORY</div>
+    <div class="book-title">아름다운 동산교회</div>
+    <div class="book-sub">교회요람</div>
     <div class="rule"></div>
-    <label for="loginEmail">Username</label>
-    <input id="loginEmail" type="text" autocomplete="username" placeholder="Enter username">
-    <label for="loginPw">Password</label>
-    <input id="loginPw" type="password" autocomplete="current-password" placeholder="Password">
-    <button class="btn btn-primary" id="loginBtn">Sign in</button>
+    <label for="loginEmail" data-i18n="username">Username</label>
+    <input id="loginEmail" type="text" autocomplete="username" placeholder="Enter username" data-ph="enterUser">
+    <label for="loginPw" data-i18n="password">Password</label>
+    <input id="loginPw" type="password" autocomplete="current-password" placeholder="Password" data-ph="password">
+    <button class="btn btn-primary" id="loginBtn" data-i18n="signIn">Sign in</button>
     <div class="login-msg" id="loginMsg"></div>
     <div class="setup-note" id="setupNote" hidden>
       ⚠️ Firebase is not configured yet. Paste your project settings into the
@@ -205,34 +206,35 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 <div id="app" hidden>
   <header class="appbar">
     <div class="appbar-inner">
-      <h1 id="churchTitle">Member Directory<small id="churchNameEn">BEAUTIFUL HILL PRESBYTERIAN CHURCH</small></h1>
+      <h1 id="churchTitle"><span data-i18n="appTitle">Member Directory</span><small id="churchNameEn">BEAUTIFUL HILL PRESBYTERIAN CHURCH</small></h1>
       <div class="spacer"></div>
-      <button class="btn btn-sm" id="printOpenBtn">🖨 Print</button>
-      <button class="btn btn-sm btn-gold" id="addBtn" hidden>＋ Add Member</button>
-      <button class="btn btn-sm" id="importBtn" hidden>⬆ Import</button>
-      <button class="btn btn-sm" id="fieldsBtn" hidden>⚙ Fields</button>
-      <button class="btn btn-sm" id="accountBtn" hidden>👤 Accounts</button>
-      <button class="btn btn-sm" id="logoutBtn">Log out</button>
+      <button class="btn btn-sm" id="langBtn">한국어</button>
+      <button class="btn btn-sm" id="printOpenBtn" data-i18n="print">🖨 Print</button>
+      <button class="btn btn-sm btn-gold" id="addBtn" hidden data-i18n="addMember">＋ Add Member</button>
+      <button class="btn btn-sm" id="importBtn" hidden data-i18n="import">⬆ Import</button>
+      <button class="btn btn-sm" id="fieldsBtn" hidden data-i18n="fields">⚙ Fields</button>
+      <button class="btn btn-sm" id="accountBtn" hidden data-i18n="accounts">👤 Accounts</button>
+      <button class="btn btn-sm" id="logoutBtn" data-i18n="logout">Log out</button>
     </div>
   </header>
 
   <div class="toolbar">
-    <input type="search" id="searchBox" placeholder="Search name, phone, or address">
+    <input type="search" id="searchBox" placeholder="Search name, phone, or address" data-ph="search">
     <span id="dynFilters" style="display:contents"></span>
     <select id="monthFilter">
-      <option value="">All birthdays</option>
-      <option value="1">January</option><option value="2">February</option><option value="3">March</option>
-      <option value="4">April</option><option value="5">May</option><option value="6">June</option>
-      <option value="7">July</option><option value="8">August</option><option value="9">September</option>
-      <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+      <option value="" data-i18n="allBirthdays">All birthdays</option>
+      <option value="1" data-i18n="m1">January</option><option value="2" data-i18n="m2">February</option><option value="3" data-i18n="m3">March</option>
+      <option value="4" data-i18n="m4">April</option><option value="5" data-i18n="m5">May</option><option value="6" data-i18n="m6">June</option>
+      <option value="7" data-i18n="m7">July</option><option value="8" data-i18n="m8">August</option><option value="9" data-i18n="m9">September</option>
+      <option value="10" data-i18n="m10">October</option><option value="11" data-i18n="m11">November</option><option value="12" data-i18n="m12">December</option>
     </select>
     <select id="sortSel">
-      <option value="last">By last name</option>
-      <option value="first">By first name</option>
-      <option value="bday">By birthday (month/day)</option>
+      <option value="last" data-i18n="sortLast">By last name</option>
+      <option value="first" data-i18n="sortFirst">By first name</option>
+      <option value="bday" data-i18n="sortBday">By birthday (month/day)</option>
     </select>
     <select id="groupSel"><option value="">No grouping</option></select>
-    <button class="btn btn-sm" id="deptMgrBtn" hidden>⚙ Departments</button>
+    <button class="btn btn-sm" id="deptMgrBtn" hidden data-i18n="departments">⚙ Departments</button>
     <span class="count-note" id="countNote"></span>
   </div>
 
@@ -286,8 +288,8 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn" data-close="editOverlay">Cancel</button>
-      <button class="btn btn-primary" id="saveBtn">Save</button>
+      <button class="btn" data-close="editOverlay" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-primary" id="saveBtn" data-i18n="save">Save</button>
     </div>
   </div>
 </div>
@@ -296,23 +298,23 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 <div class="overlay" id="accountOverlay" hidden>
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-head">
-      <h2>Account Management</h2>
+      <h2 data-i18n="accountMgmt">Account Management</h2>
       <button class="x-btn" data-close="accountOverlay" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
       <div class="form-grid">
-        <div><label>Username</label><input id="newAccEmail" type="text" placeholder="e.g. jdoe"></div>
-        <div><label>Initial password (6+ characters)</label><input id="newAccPw" placeholder="e.g. bhpc2026!"></div>
-        <div><label>Role</label>
+        <div><label data-i18n="username">Username</label><input id="newAccEmail" type="text" placeholder="e.g. jdoe"></div>
+        <div><label data-i18n="initPw">Initial password (6+ characters)</label><input id="newAccPw" placeholder="e.g. bhpc2026!"></div>
+        <div><label data-i18n="role">Role</label>
           <select id="newAccRole">
-            <option value="viewer">View only</option>
-            <option value="admin">Admin</option>
+            <option value="viewer" data-i18n="viewOnly">View only</option>
+            <option value="admin" data-i18n="admin">Admin</option>
           </select>
         </div>
-        <div style="align-self:end"><button class="btn btn-primary" id="createAccBtn" style="width:100%">Create account</button></div>
+        <div style="align-self:end"><button class="btn btn-primary" id="createAccBtn" style="width:100%" data-i18n="createAccount">Create account</button></div>
       </div>
       <div class="hint" id="accMsg" style="min-height:16px;margin-top:6px"></div>
-      <h3 style="font-size:14px;color:var(--ink-soft);margin:18px 0 6px">Registered accounts</h3>
+      <h3 style="font-size:14px;color:var(--ink-soft);margin:18px 0 6px" data-i18n="registeredAcc">Registered accounts</h3>
       <div id="userList"></div>
       <div class="hint" style="margin-top:10px">
         ※ To fully delete an account (block sign-in), delete the user in Firebase Console → Authentication,
@@ -326,29 +328,29 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 <div class="overlay" id="printOverlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" style="max-width:480px">
     <div class="modal-head">
-      <h2>Print Settings</h2>
+      <h2 data-i18n="printSettings">Print Settings</h2>
       <button class="x-btn" data-close="printOverlay" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
       <div class="form-grid">
-        <div class="full"><label>Directory title</label><input id="pTitle" value="BHPC Member Directory"></div>
-        <div><label>Cards per row</label>
+        <div class="full"><label data-i18n="dirTitle">Directory title</label><input id="pTitle" value="BHPC Member Directory"></div>
+        <div><label data-i18n="cardsPerRow">Cards per row</label>
           <select id="pCols"><option value="3">3 (large cards)</option><option value="4" selected>4 (default)</option></select>
         </div>
-        <div><label>Sort</label>
+        <div><label data-i18n="sort">Sort</label>
           <select id="pSort"><option value="last">By last name</option><option value="first">By first name</option><option value="bday">By birthday (month/day)</option></select>
         </div>
         <div class="full">
-          <label>Include</label>
+          <label data-i18n="include">Include</label>
           <div id="pIncludes"></div>
-          <label class="check-inline"><input type="checkbox" id="pFam">Family</label>
+          <label class="check-inline"><input type="checkbox" id="pFam"><span data-i18n="family">Family</span></label>
         </div>
         <div class="full hint">The current search and status filters apply to the printout as well.</div>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn" data-close="printOverlay">Cancel</button>
-      <button class="btn btn-primary" id="doPrintBtn">Print preview</button>
+      <button class="btn" data-close="printOverlay" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-primary" id="doPrintBtn" data-i18n="printPreview">Print preview</button>
     </div>
   </div>
 </div>
@@ -357,7 +359,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 <div class="overlay" id="dOverlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" style="max-width:440px">
     <div class="modal-head">
-      <h2>Departments</h2>
+      <h2 data-i18n="departmentsTitle">Departments</h2>
       <button class="x-btn" data-close="dOverlay" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
@@ -367,12 +369,12 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       </p>
       <div id="dList"></div>
       <div style="display:flex;gap:8px;margin-top:14px">
-        <input id="dNew" placeholder="New department name" style="flex:1">
-        <button class="btn btn-primary" id="dAdd" type="button">Add</button>
+        <input id="dNew" placeholder="New department name" data-ph="newDept" style="flex:1">
+        <button class="btn btn-primary" id="dAdd" type="button" data-i18n="add">Add</button>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn" data-close="dOverlay">Done</button>
+      <button class="btn" data-close="dOverlay" data-i18n="done">Done</button>
     </div>
   </div>
 </div>
@@ -381,7 +383,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 <div class="overlay" id="fieldsOverlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" style="max-width:560px">
     <div class="modal-head">
-      <h2>Manage Fields</h2>
+      <h2 data-i18n="manageFields">Manage Fields</h2>
       <button class="x-btn" data-close="fieldsOverlay" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
@@ -391,7 +393,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       </p>
       <div id="fieldRows"></div>
       <div style="display:flex;gap:8px;margin-top:14px;align-items:center;flex-wrap:wrap">
-        <input id="newFieldLabel" placeholder="New field name (e.g. Occupation)" style="flex:1;min-width:160px">
+        <input id="newFieldLabel" placeholder="New field name (e.g. Occupation)" data-ph="newField" style="flex:1;min-width:160px">
         <select id="newFieldType" style="width:auto">
           <option value="text">Text</option>
           <option value="select">Dropdown</option>
@@ -400,12 +402,12 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
           <option value="email">Email</option>
           <option value="textarea">Long text</option>
         </select>
-        <button class="btn" id="fieldAddBtn" type="button">＋ Add</button>
+        <button class="btn" id="fieldAddBtn" type="button" data-i18n="addPlus">＋ Add</button>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn" data-close="fieldsOverlay">Cancel</button>
-      <button class="btn btn-primary" id="fieldsSaveBtn">Save fields</button>
+      <button class="btn" data-close="fieldsOverlay" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-primary" id="fieldsSaveBtn" data-i18n="saveFields">Save fields</button>
     </div>
   </div>
 </div>
@@ -414,7 +416,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 <div class="overlay" id="importOverlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" style="max-width:480px">
     <div class="modal-head">
-      <h2>Import Members</h2>
+      <h2 data-i18n="importMembers">Import Members</h2>
       <button class="x-btn" data-close="importOverlay" aria-label="Close">×</button>
     </div>
     <div class="modal-body">
@@ -430,8 +432,8 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       <div id="importPreview" class="hint" style="min-height:18px;margin-top:8px"></div>
     </div>
     <div class="modal-foot">
-      <button class="btn" data-close="importOverlay">Cancel</button>
-      <button class="btn btn-primary" id="doImportBtn" disabled>Import</button>
+      <button class="btn" data-close="importOverlay" data-i18n="cancel">Cancel</button>
+      <button class="btn btn-primary" id="doImportBtn" disabled data-i18n="importBtn">Import</button>
     </div>
   </div>
 </div>
@@ -511,7 +513,9 @@ if (!FIREBASE_CONFIG.apiKey || FIREBASE_CONFIG.apiKey.includes("PASTE")) {
       try {
         const doc = await db.collection("users").doc(user.uid).get();
         myRole = doc.exists ? (doc.data().role || "viewer") : "viewer";
-      } catch(e){ myRole = "viewer"; }
+        myDepts = (doc.exists && Array.isArray(doc.data().departments)) ? doc.data().departments : [];
+        if (myRole === "admin") myDepts = [];   // admins always see everyone
+      } catch(e){ myRole = "viewer"; myDepts = []; }
       $("loginScreen").hidden = true;
       $("app").hidden = false;
       $("addBtn").hidden = myRole !== "admin";
@@ -558,11 +562,17 @@ function startMembers(){
 const bdayMonth = m => { const b = m.birthday || ""; return /^\d{4}-\d{2}-\d{2}/.test(b) ? parseInt(b.slice(5,7),10) : null; };
 const bdayMD = m => { const b = m.birthday || ""; return /^\d{4}-\d{2}-\d{2}/.test(b) ? b.slice(5) : "99-99"; };
 const filterState = {};   // { fieldKey: selectedValue }
+/* Members this account is allowed to see. Empty myDepts = everyone. */
+let myDepts = [];
+function visibleMembers(){
+  if (!myDepts.length) return members;
+  return members.filter(m => myDepts.includes(m.department || ""));
+}
 function currentList(){
   const q = $("searchBox").value.trim().toLowerCase();
   const mon = $("monthFilter").value;
   const active = MEMBER_FIELDS.filter(f => f.filter && filterState[f.key]);
-  let list = members.filter(m => {
+  let list = visibleMembers().filter(m => {
     for (const f of active) if ((m[f.key]||"") !== filterState[f.key]) return false;
     if (mon && bdayMonth(m) !== parseInt(mon,10)) return false;
     if (!q) return true;
@@ -594,7 +604,8 @@ function cityOf(addr){
 function optionsFor(key){
   const f = MEMBER_FIELDS.find(x => x.key === key);
   const opts = [...((f && f.options) || [])];
-  members.forEach(m => { const v = m[key]; if (v && !opts.includes(v)) opts.push(v); });
+  visibleMembers().forEach(m => { const v = m[key]; if (v && !opts.includes(v)) opts.push(v); });
+  if (key === "department" && myDepts.length) return opts.filter(o => myDepts.includes(o));
   return opts;
 }
 function renderFilters(){
@@ -602,7 +613,7 @@ function renderFilters(){
   Object.keys(filterState).forEach(k => { if (!fields.some(f => f.key === k)) delete filterState[k]; });
   $("dynFilters").innerHTML = fields.map(f => {
     const cur = filterState[f.key] || "";
-    return `<select data-fk="${f.key}"><option value="">All ${esc(f.label.toLowerCase())}</option>` +
+    return `<select data-fk="${f.key}"><option value="">${esc(t("allOf")(f.label.toLowerCase()))}</option>` +
       optionsFor(f.key).map(o => `<option${o===cur?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
   }).join("");
   $("dynFilters").querySelectorAll("select").forEach(sel => sel.onchange = () => {
@@ -612,8 +623,8 @@ function renderFilters(){
 
   const groupable = MEMBER_FIELDS.filter(f => f.type === "select");
   const curG = $("groupSel").value;
-  $("groupSel").innerHTML = `<option value="">No grouping</option>` +
-    groupable.map(f => `<option value="${f.key}"${f.key===curG?" selected":""}>Group by ${esc(f.label.toLowerCase())}</option>`).join("");
+  $("groupSel").innerHTML = `<option value="">${t("noGrouping")}</option>` +
+    groupable.map(f => `<option value="${f.key}"${f.key===curG?" selected":""}>${t("groupBy")} — ${esc(f.label)}</option>`).join("");
 }
 function memberCardHTML(m){
   const nameLF = [m.lastName, m.firstName].filter(Boolean).join(" ") || fullName(m);
@@ -633,7 +644,7 @@ function render(){
   renderFilters();
 
   const list = currentList();
-  $("countNote").textContent = `Showing ${list.length} of ${members.length} members`;
+  $("countNote").textContent = t("showing")(list.length, visibleMembers().length);
 
   const gKey = $("groupSel").value;
   const gField = MEMBER_FIELDS.find(f => f.key === gKey);
@@ -643,13 +654,13 @@ function render(){
     html = order.map(val => {
       const group = list.filter(m => (m[gKey]||"") === val);
       if (!group.length) return "";
-      return `<h2 class="grid-sec">${val ? esc(val) : "No " + esc(gField.label.toLowerCase())} <span>${group.length}</span></h2>`
+      return `<h2 class="grid-sec">${val ? esc(val) : esc(lang==="ko" ? gField.label+" 없음" : "No "+gField.label.toLowerCase())} <span>${group.length}</span></h2>`
         + group.map(m => memberCardHTML(m)).join("");
     }).join("");
   } else {
     html = list.map(m => memberCardHTML(m)).join("");
   }
-  $("grid").innerHTML = html || `<p style="grid-column:1/-1;color:var(--ink-soft)">No members to display.</p>`;
+  $("grid").innerHTML = html || `<p style="grid-column:1/-1;color:var(--ink-soft)">${t("none")}</p>`;
 }
 ["searchBox","monthFilter","sortSel","groupSel"].forEach(id => $(id).addEventListener("input", render));
 $("grid").addEventListener("click", e => {
@@ -885,13 +896,36 @@ async function loadUsers(){
   const snap = await db.collection("users").get();
   $("userList").innerHTML = snap.docs.map(d => {
     const u = d.data();
+    const deps = Array.isArray(u.departments) ? u.departments : [];
+    const scope = u.role === "admin"
+      ? `<span class="use">${lang==="ko"?"전체 열람":"sees everyone"}</span>`
+      : `<span class="use">${deps.length ? esc(deps.join(", ")) : (lang==="ko"?"전체 열람":"sees everyone")}</span>`;
     return `<div class="user-row" data-uid="${d.id}">
       <span class="email">${esc(toDisplay(u.email || ""))}</span>
-      <span class="role-badge ${u.role==='admin'?'role-admin':'role-viewer'}">${u.role==='admin'?'Admin':'View'}</span>
-      <button class="btn btn-sm role-toggle">Change role</button>
-      <button class="btn btn-sm btn-danger doc-remove">Remove</button>
+      <span class="role-badge ${u.role==='admin'?'role-admin':'role-viewer'}">${u.role==='admin'?t("admin"):t("viewOnly")}</span>
+      ${scope}
+      <button class="btn btn-sm role-toggle">${lang==="ko"?"권한 변경":"Change role"}</button>
+      <button class="btn btn-sm dept-scope"${u.role==='admin'?" disabled":""}>${lang==="ko"?"부서 지정":"Departments"}</button>
+      <button class="btn btn-sm btn-danger doc-remove">${lang==="ko"?"삭제":"Remove"}</button>
     </div>`;
-  }).join("") || `<div class="hint">No accounts registered.</div>`;
+  }).join("") || `<div class="hint">${lang==="ko"?"등록된 계정이 없습니다.":"No accounts registered."}</div>`;
+
+  $("userList").querySelectorAll(".dept-scope").forEach(b => b.onclick = async () => {
+    const uid = b.closest(".user-row").dataset.uid;
+    const doc = await db.collection("users").doc(uid).get();
+    const cur = (doc.exists && Array.isArray(doc.data().departments)) ? doc.data().departments : [];
+    const all = [...((MEMBER_FIELDS.find(f => f.key === "department") || {}).options || [])];
+    const prompt_ = lang==="ko"
+      ? `이 계정이 볼 수 있는 부서를 쉼표로 입력하세요.\n비워 두면 전체를 볼 수 있습니다.\n\n사용 가능한 부서: ${all.join(", ") || "(없음)"}`
+      : `Enter the departments this account may see, separated by commas.\nLeave blank to allow everyone.\n\nAvailable: ${all.join(", ") || "(none)"}`;
+    const input = prompt(prompt_, cur.join(", "));
+    if (input === null) return;
+    const list = input.split(",").map(x => x.trim()).filter(Boolean);
+    const unknown = list.filter(x => !all.includes(x));
+    if (unknown.length && !confirm((lang==="ko"?"등록되지 않은 부서가 있습니다: ":"These departments are not in the list: ") + unknown.join(", ") + (lang==="ko"?"\n그대로 저장할까요?":"\nSave anyway?"))) return;
+    await db.collection("users").doc(uid).update({ departments: list });
+    loadUsers();
+  });
   $("userList").querySelectorAll(".role-toggle").forEach(b => b.onclick = async () => {
     const row = b.closest(".user-row");
     const uid = row.dataset.uid;
@@ -936,7 +970,75 @@ $("createAccBtn").onclick = async () => {
   $("createAccBtn").disabled = false;
 };
 
-/* ---------- department quick manager ---------- */
+/* =====================================================================
+   UI LANGUAGE — only interface text is translated.
+   Member data and field names stay exactly as entered.
+   ===================================================================== */
+const UI = {
+  ko: {
+    username:"아이디", password:"비밀번호", enterUser:"아이디 입력",
+    signIn:"로그인", appTitle:"교인 명부", print:"🖨 인쇄", addMember:"＋ 교인 추가",
+    import:"⬆ 일괄 등록", fields:"⚙ 항목 설정", accounts:"👤 계정 관리", logout:"로그아웃",
+    departments:"⚙ 부서 관리", search:"이름 · 전화번호 · 주소 검색",
+    allBirthdays:"생일 전체", m1:"1월", m2:"2월", m3:"3월", m4:"4월", m5:"5월", m6:"6월",
+    m7:"7월", m8:"8월", m9:"9월", m10:"10월", m11:"11월", m12:"12월",
+    sortLast:"성(姓) 순", sortFirst:"이름 순", sortBday:"생일 순 (월/일)",
+    noGrouping:"묶지 않음", groupBy:"부서별 보기",
+    accountMgmt:"계정 관리", printSettings:"인쇄 설정", departmentsTitle:"부서 관리",
+    manageFields:"항목 설정", importMembers:"교인 일괄 등록",
+    save:"저장", saveFields:"항목 저장", cancel:"취소", done:"완료", add:"추가", addPlus:"＋ 추가",
+    printPreview:"인쇄 미리보기", importBtn:"등록", createAccount:"계정 만들기",
+    initPw:"초기 비밀번호 (6자 이상)", role:"권한", viewOnly:"열람 전용", admin:"관리자",
+    registeredAcc:"등록된 계정", dirTitle:"명부 제목", cardsPerRow:"한 줄에 표시할 수",
+    sort:"정렬", include:"포함할 항목", family:"가족 관계",
+    newDept:"새 부서 이름", newField:"새 항목 이름 (예: 직분)",
+    showing:(n,t)=>`전체 ${t}명 중 ${n}명 표시`,
+    none:"표시할 교인이 없습니다.", loginFail:"로그인에 실패했습니다. 아이디와 비밀번호를 확인해 주세요.",
+    edit:"수정", del:"삭제", close:"닫기", noDept:"부서 없음", allOf:l=>`${l} 전체`
+  },
+  en: {
+    username:"Username", password:"Password", enterUser:"Enter username",
+    signIn:"Sign in", appTitle:"Member Directory", print:"🖨 Print", addMember:"＋ Add Member",
+    import:"⬆ Import", fields:"⚙ Fields", accounts:"👤 Accounts", logout:"Log out",
+    departments:"⚙ Departments", search:"Search name, phone, or address",
+    allBirthdays:"All birthdays", m1:"January", m2:"February", m3:"March", m4:"April", m5:"May",
+    m6:"June", m7:"July", m8:"August", m9:"September", m10:"October", m11:"November", m12:"December",
+    sortLast:"By last name", sortFirst:"By first name", sortBday:"By birthday (month/day)",
+    noGrouping:"No grouping", groupBy:"Group by",
+    accountMgmt:"Account Management", printSettings:"Print Settings", departmentsTitle:"Departments",
+    manageFields:"Manage Fields", importMembers:"Import Members",
+    save:"Save", saveFields:"Save fields", cancel:"Cancel", done:"Done", add:"Add", addPlus:"＋ Add",
+    printPreview:"Print preview", importBtn:"Import", createAccount:"Create account",
+    initPw:"Initial password (6+ characters)", role:"Role", viewOnly:"View only", admin:"Admin",
+    registeredAcc:"Registered accounts", dirTitle:"Directory title", cardsPerRow:"Cards per row",
+    sort:"Sort", include:"Include", family:"Family",
+    newDept:"New department name", newField:"New field name (e.g. Occupation)",
+    showing:(n,t)=>`Showing ${n} of ${t} members`,
+    none:"No members to display.", loginFail:"Sign-in failed. Please check your username and password.",
+    edit:"Edit", del:"Delete", close:"Close", noDept:"No department", allOf:l=>`All ${l}`
+  }
+};
+let lang = localStorage.getItem("bhpcLang") || "en";
+const t = k => (UI[lang][k] ?? UI.en[k] ?? k);
+function applyLang(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => {
+    const v = UI[lang][el.dataset.i18n];
+    if (typeof v === "string") el.textContent = v;
+  });
+  document.querySelectorAll("[data-ph]").forEach(el => {
+    const v = UI[lang][el.dataset.ph];
+    if (typeof v === "string") el.placeholder = v;
+  });
+  $("langBtn").textContent = lang === "ko" ? "English" : "한국어";
+  if (typeof members !== "undefined" && members.length) render();
+}
+$("langBtn").onclick = () => {
+  lang = lang === "ko" ? "en" : "ko";
+  localStorage.setItem("bhpcLang", lang);
+  applyLang();
+};
+applyLang();
 $("deptMgrBtn").onclick = () => { renderDeptMgr(); $("dOverlay").hidden = false; };
 function deptListNow(){
   const f = MEMBER_FIELDS.find(x => x.key === "department");
