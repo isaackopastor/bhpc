@@ -430,8 +430,14 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
         Blank cells are fine. Photos and family relations are added in the app afterwards.
       </p>
       <input type="file" id="importFile" accept=".xlsx,.xls,.csv" style="width:auto">
-      <div style="margin-top:10px">
-        <label class="check-inline"><input type="checkbox" id="importSkipDup" checked>Skip rows whose first + last name already exists</label>
+      <div style="margin-top:12px">
+        <label style="display:block;font-size:13px;font-weight:600;color:var(--ink-soft);margin-bottom:4px">If a member with the same first + last name already exists</label>
+        <select id="importMode" style="width:100%">
+          <option value="skip">Skip them — only add new members</option>
+          <option value="fill">Fill in blanks only — keep everything already entered</option>
+          <option value="overwrite">Update — overwrite with the values in the file</option>
+        </select>
+        <div class="hint" id="importModeHint">Existing records are left untouched.</div>
       </div>
       <div id="importPreview" class="hint" style="min-height:18px;margin-top:8px"></div>
     </div>
@@ -473,7 +479,10 @@ const DEFAULT_FIELDS = [
   { key:"address",   label:"Address",        type:"text", wide:true },
   { key:"hometown",  label:"Hometown",       type:"text", card:true },
   { key:"email",     label:"Email address",  type:"email" },
-  { key:"baptized",  label:"Baptized",       type:"select", options:["Yes","No"] },
+  { key:"baptized",  label:"Baptized",       type:"select", options:["Infant Baptized","Baptized","Confirmed","None","Unknown"], optionsKo:["유아세례","세례","입교","없음","모름"] },
+  { key:"infantBaptismDate", label:"Infant baptism date", type:"date" },
+  { key:"baptismDate",       label:"Baptism date",        type:"date" },
+  { key:"confirmationDate",  label:"Confirmation date",   type:"date" },
   { key:"joined",    label:"Date joined",    type:"date" },
   { key:"department",label:"Department",     type:"select", options:["Worship","Education","Youth","Children","Missions","Administration"], filter:true },
   { key:"smallGroup",label:"Small group",    type:"text" },
@@ -570,14 +579,21 @@ let backfillDone = false;
 async function backfillHometowns(){
   if (backfillDone || myRole !== "admin") return;
   if (!MEMBER_FIELDS.some(f => f.key === "hometown")) return;
-  const todo = members.filter(m => !m.hometown && m.address && cityOf(m.address));
+  const BAP_OLD = { Yes: "Baptized", No: "None" };
+  const todo = members.filter(m =>
+    (!m.hometown && m.address && cityOf(m.address)) || BAP_OLD[m.baptized]);
   if (!todo.length) { backfillDone = true; return; }
   backfillDone = true;
   try {
     const batch = db.batch();
-    todo.forEach(m => batch.update(db.collection("members").doc(m.id), { hometown: cityOf(m.address) }));
+    todo.forEach(m => {
+      const patch = {};
+      if (!m.hometown && m.address && cityOf(m.address)) patch.hometown = cityOf(m.address);
+      if (BAP_OLD[m.baptized]) patch.baptized = BAP_OLD[m.baptized];
+      batch.update(db.collection("members").doc(m.id), patch);
+    });
     await batch.commit();
-    toast(lang === "ko" ? `${todo.length}명의 Hometown을 주소에서 채웠습니다` : `Filled in Hometown for ${todo.length} member(s)`);
+    toast(lang === "ko" ? `${todo.length}명의 정보를 정리했습니다` : `Updated ${todo.length} member record(s)`);
   } catch(e) { backfillDone = false; }
 }
 
@@ -654,7 +670,7 @@ function renderFilters(){
   $("dynFilters").innerHTML = fields.map(f => {
     const cur = filterState[f.key] || "";
     return `<select data-fk="${f.key}"><option value="">${esc(t("allOf")(f.label.toLowerCase()))}</option>` +
-      optionsFor(f.key).map(o => `<option${o===cur?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
+      optionsFor(f.key).map(o => `<option value="${esc(o)}"${o===cur?" selected":""}>${esc(optLabel(f,o))}</option>`).join("") + `</select>`;
   }).join("");
   $("dynFilters").querySelectorAll("select").forEach(sel => sel.onchange = () => {
     filterState[sel.dataset.fk] = sel.value;
@@ -665,6 +681,30 @@ function renderFilters(){
   const curG = $("groupSel").value;
   $("groupSel").innerHTML = `<option value="">${t("noGrouping")}</option>` +
     groupable.map(f => `<option value="${f.key}"${f.key===curG?" selected":""}>${t("groupBy")} — ${esc(f.label)}</option>`).join("");
+}
+/* The baptism status follows the dates: entering a date fills it in, but a
+   status chosen by hand is never downgraded (dates are often unknown). */
+const BAP_RANK = { "": 0, "None": 0, "Unknown": 0, "Infant Baptized": 1, "Baptized": 2, "Confirmed": 3 };
+function withBaptismStatus(data){
+  if (!MEMBER_FIELDS.some(f => f.key === "baptized")) return data;
+  const has = k => /^\d{4}-\d{2}-\d{2}/.test((data[k] || "").trim());
+  const derived = has("confirmationDate") ? "Confirmed"
+                : has("baptismDate")      ? "Baptized"
+                : has("infantBaptismDate")? "Infant Baptized" : "";
+  if (derived && (BAP_RANK[derived] || 0) > (BAP_RANK[data.baptized] ?? 0)) data.baptized = derived;
+  return data;
+}
+
+/* Values are stored in English; fields may carry a Korean label list for display. */
+function optLabel(f, v){
+  if (!v || lang !== "ko" || !f || !Array.isArray(f.optionsKo)) return v;
+  const i = (f.options || []).indexOf(v);
+  return i >= 0 && f.optionsKo[i] ? f.optionsKo[i] : v;
+}
+function optValue(f, label){
+  if (!label || !f || !Array.isArray(f.optionsKo)) return label;
+  const i = f.optionsKo.indexOf(String(label).trim());
+  return i >= 0 ? f.options[i] : label;
 }
 function cardValue(m, f){
   let v = m[f.key] || "";
@@ -679,7 +719,7 @@ function cardValue(m, f){
       : "🎂 " + d.toLocaleDateString(loc, { month:"short", day:"numeric" });
   }
   if (f.key === "address" && f.fmt !== "full") return cityOf(v);
-  return v;
+  return optLabel(f, v);
 }
 function memberCardHTML(m){
   const nameLF = [m.lastName, m.firstName].filter(Boolean).join(" ") || fullName(m);
@@ -711,7 +751,7 @@ function render(){
     html = order.map(val => {
       const group = list.filter(m => (m[gKey]||"") === val);
       if (!group.length) return "";
-      return `<h2 class="grid-sec">${val ? esc(val) : esc(lang==="ko" ? gField.label+" 없음" : "No "+gField.label.toLowerCase())} <span>${group.length}</span></h2>`
+      return `<h2 class="grid-sec">${val ? esc(optLabel(gField, val)) : esc(lang==="ko" ? gField.label+" 없음" : "No "+gField.label.toLowerCase())} <span>${group.length}</span></h2>`
         + group.map(m => memberCardHTML(m)).join("");
     }).join("");
   } else {
@@ -747,7 +787,7 @@ function openDetail(id){
     .filter(f => !["firstName","lastName","notes","status"].includes(f.key))
     .filter(f => (m[f.key] || "").toString().trim() !== "")
     .map(f => {
-      let v = esc(m[f.key]);
+      let v = esc(optLabel(f, m[f.key]));
       if (f.type === "tel")   v = `<a href="tel:${v}">${v}</a>`;
       if (f.type === "email") v = `<a href="mailto:${v}">${v}</a>`;
       return `<div class="row"><span class="k">${esc(f.label)}</span><span>${v}</span></div>`;
@@ -840,7 +880,7 @@ function buildForm(m){
     let input;
     if (f.type === "select") {
       input = `<select id="fld_${f.key}"><option value=""></option>` +
-        f.options.map(o => `<option${o===v?" selected":""}>${esc(o)}</option>`).join("") + `</select>`;
+        f.options.map(o => `<option value="${esc(o)}"${o===v?" selected":""}>${esc(optLabel(f,o))}</option>`).join("") + `</select>`;
     } else if (f.type === "textarea") {
       input = `<textarea id="fld_${f.key}" rows="2">${esc(v)}</textarea>`;
     } else {
@@ -852,7 +892,7 @@ function buildForm(m){
 function readForm(){
   const data = {};
   MEMBER_FIELDS.forEach(f => data[f.key] = ($("fld_"+f.key).value || "").trim());
-  return withHometown(data);
+  return withBaptismStatus(withHometown(data));
 }
 /* Hometown is derived from the address when left blank, so cards can show a
    city without every account needing access to the full street address. */
@@ -1185,6 +1225,20 @@ function startFieldConfig(){
           if (f.key === "birthday") { f.card = true; f.fmt = f.fmt || "monthday"; }
         });
       }
+      // one-time: replace the old Yes/No baptism options with the four-way list
+      const bf = MEMBER_FIELDS.find(f => f.key === "baptized");
+      if (bf && Array.isArray(bf.options) && (bf.options.includes("Yes") || !bf.options.includes("Infant Baptized"))) {
+        const d = DEFAULT_FIELDS.find(f => f.key === "baptized");
+        bf.options = [...d.options]; bf.optionsKo = [...d.optionsKo];
+      }
+      // one-time: add the baptism date fields next to the status
+      if (!MEMBER_FIELDS.some(f => f.key === "confirmationDate")) {
+        const at = MEMBER_FIELDS.findIndex(f => f.key === "baptized");
+        const extra = ["infantBaptismDate","baptismDate","confirmationDate"]
+          .filter(k => !MEMBER_FIELDS.some(f => f.key === k))
+          .map(k => JSON.parse(JSON.stringify(DEFAULT_FIELDS.find(f => f.key === k))));
+        MEMBER_FIELDS.splice(at >= 0 ? at + 1 : MEMBER_FIELDS.length, 0, ...extra);
+      }
       // one-time: introduce Hometown and keep the full address off the cards
       if (!MEMBER_FIELDS.some(f => f.key === "hometown")) {
         const hf = DEFAULT_FIELDS.find(f => f.key === "hometown");
@@ -1280,6 +1334,9 @@ function renderFieldRows(){
     const opt = row.querySelector(".fr-options");
     if (opt) opt.oninput = e => {
       draftFields[i].options = e.target.value.split(",").map(s=>s.trim()).filter(Boolean);
+      // Korean labels are matched by position, so drop them if the list length changes
+      const ko = draftFields[i].optionsKo;
+      if (Array.isArray(ko) && ko.length !== draftFields[i].options.length) delete draftFields[i].optionsKo;
     };
   });
 }
@@ -1364,17 +1421,27 @@ $("importFile").addEventListener("change", e => {
           else val = String(v ?? "").trim();
           if (key === "baptized") {
             const low = val.toLowerCase();
-            val = ["y","yes","true","1","o"].includes(low) ? "Yes" : (["n","no","false","0","x"].includes(low) ? "No" : val);
+            if (low.includes("confirm") || low === "입교") val = "Confirmed";
+            else if (low.includes("infant") || low === "유아세례") val = "Infant Baptized";
+            else if (["y","yes","true","1","o","baptized","세례"].includes(low)) val = "Baptized";
+            else if (["n","no","false","0","x","none","없음"].includes(low)) val = "None";
+            else if (["unknown","모름"].includes(low)) val = "Unknown";
           }
+          if (f && f.type === "select") val = optValue(f, val);
           m[key] = val;
         }
         return m;
       })
       .filter(m => (m.firstName || m.lastName))                       // needs a name
       .filter(m => !(m.notes || "").toLowerCase().includes("example row")); // skip template example
-      $("importPreview").textContent = importRows.length
-        ? `Found ${importRows.length} member(s) ready to import.`
-        : "No valid rows found. Check that the header row matches the template.";
+      if (importRows.length) {
+        const sigOf = o => `${(o.firstName||"").toLowerCase().trim()}|${(o.lastName||"").toLowerCase().trim()}`;
+        const have = new Set(members.map(sigOf));
+        const match = importRows.filter(r => have.has(sigOf(r))).length;
+        $("importPreview").textContent = `Found ${importRows.length} row(s): ${importRows.length - match} new, ${match} already in the directory.`;
+      } else {
+        $("importPreview").textContent = "No valid rows found. Check that the header row matches the template.";
+      }
       $("doImportBtn").disabled = importRows.length === 0;
     } catch(err) {
       $("importPreview").textContent = "Could not read the file. Please use the .xlsx template or a CSV.";
@@ -1383,30 +1450,69 @@ $("importFile").addEventListener("change", e => {
   };
   reader.readAsArrayBuffer(file);
 });
+const MODE_HINT = {
+  skip: "Existing records are left untouched.",
+  fill: "Only empty fields are filled in. Values already in the directory are kept, and photos and family links are never changed.",
+  overwrite: "Fields that have a value in the file replace what is in the directory. Blank cells in the file are ignored, and photos and family links are kept."
+};
+$("importMode").onchange = () => { $("importModeHint").textContent = MODE_HINT[$("importMode").value]; };
+
 $("doImportBtn").onclick = async () => {
   if (!importRows.length) return;
-  const skipDup = $("importSkipDup").checked;
-  const existing = new Set(members.map(m => `${(m.firstName||"").toLowerCase()}|${(m.lastName||"").toLowerCase()}`));
-  let added = 0, skipped = 0;
+  const mode = $("importMode").value;
+  const sigOf = o => `${(o.firstName||"").toLowerCase().trim()}|${(o.lastName||"").toLowerCase().trim()}`;
+  const byName = new Map();
+  members.forEach(m => { if (!byName.has(sigOf(m))) byName.set(sigOf(m), m); });
+
+  let added = 0, updated = 0, skipped = 0;
   $("doImportBtn").disabled = true;
   $("importPreview").textContent = "Importing…";
   try {
     const batch = db.batch();
     for (const row of importRows) {
-      const sig = `${(row.firstName||"").toLowerCase()}|${(row.lastName||"").toLowerCase()}`;
-      if (skipDup && existing.has(sig)) { skipped++; continue; }
+      const sig = sigOf(row);
+      const hit = byName.get(sig);
+
+      if (hit) {
+        if (mode === "skip") { skipped++; continue; }
+        const patch = {};
+        MEMBER_FIELDS.forEach(f => {
+          const incoming = (row[f.key] || "").trim();
+          if (!incoming) return;                                  // blank cells never erase data
+          const current = (hit[f.key] || "").trim();
+          if (mode === "fill" && current) return;                 // keep what is already there
+          if (current !== incoming) patch[f.key] = incoming;
+        });
+        if (Object.keys(patch).length) {
+          if (!hit.hometown && !patch.hometown && (patch.address || hit.address)) {
+            const city = cityOf(patch.address || hit.address);
+            if (city) patch.hometown = city;
+          }
+          const merged = withBaptismStatus({ ...hit, ...patch });
+          if (merged.baptized && merged.baptized !== hit.baptized) patch.baptized = merged.baptized;
+          batch.update(db.collection("members").doc(hit.id), patch);
+          updated++;
+        } else skipped++;
+        continue;
+      }
+
       const data = {};
       MEMBER_FIELDS.forEach(f => data[f.key] = row[f.key] || "");
-      withHometown(data);
+      withHometown(data); withBaptismStatus(data);
       data.photo = ""; data.family = [];
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
-      batch.set(db.collection("members").doc(), data);
-      existing.add(sig);
+      const ref = db.collection("members").doc();
+      batch.set(ref, data);
+      byName.set(sig, { id: ref.id, ...data });
       added++;
     }
     await batch.commit();
-    $("importPreview").textContent = `✓ Imported ${added} member(s).` + (skipped ? ` Skipped ${skipped} duplicate(s).` : "");
-    toast(`Imported ${added} members`);
+    const parts = [];
+    if (added) parts.push(`added ${added}`);
+    if (updated) parts.push(`updated ${updated}`);
+    if (skipped) parts.push(`skipped ${skipped}`);
+    $("importPreview").textContent = "✓ Import complete — " + (parts.join(", ") || "no changes");
+    toast(`Import complete: ${parts.join(", ") || "no changes"}`);
   } catch(err) {
     $("importPreview").textContent = "Import failed. Please check your admin permissions.";
   }
