@@ -120,6 +120,24 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 .fam-chip{display:inline-flex;align-items:center;gap:6px;background:var(--gold-soft);border:1px solid #E2D5AE;border-radius:20px;padding:5px 12px;font-size:13.5px;margin:0 6px 6px 0;cursor:pointer}
 .fam-chip b{color:var(--pine-deep)}
 .fam-chip span{color:var(--ink-soft);font-size:12px}
+.guess-box h3{color:var(--ink-soft)}
+.fam-chip.guess{background:#F3F0E7;border:1px dashed var(--line)}
+.guess-add{border:none;background:var(--pine);color:#fff;border-radius:50%;width:19px;height:19px;line-height:1;font-size:13px;padding:0;margin-left:2px;cursor:pointer}
+.guess-add:hover{background:var(--pine-deep)}
+.guess-add:disabled{opacity:.5}
+/* person picker */
+.rel-pick{flex:1;min-width:180px;position:relative}
+.pp-chosen{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:8px;padding:5px 8px;background:#fff}
+.pp-chosen img,.pp-item img{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:0 0 auto}
+.pp-none{width:26px;height:26px;border-radius:50%;background:var(--gold-soft);color:var(--gold);display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:0 0 auto}
+.pp-name{font-size:13.5px;font-weight:600;color:var(--pine-deep)}
+.pp-meta{font-size:12px;color:var(--ink-soft);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-clear{padding:2px 8px;font-size:12px}
+.pp-search input{width:100%}
+.pp-results{position:absolute;z-index:5;left:0;right:0;top:100%;margin-top:3px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);max-height:220px;overflow-y:auto}
+.pp-item{display:flex;align-items:center;gap:7px;padding:6px 9px;cursor:pointer}
+.pp-item:hover{background:#F3F0E7}
+.pp-empty{padding:8px 10px;font-size:13px;color:var(--ink-soft)}
 .memo-box{margin-top:14px;font-size:13.5px;color:var(--ink-soft);background:var(--paper);border-radius:8px;padding:10px 12px;white-space:pre-wrap}
 
 /* edit form */
@@ -470,23 +488,25 @@ const CHURCH_SUB  = "BEAUTIFUL HILL PRESBYTERIAN CHURCH";
    stored in Firestore takes over and can be edited entirely in the app.
    ===================================================================== */
 const DEFAULT_FIELDS = [
+  { key:"status",    label:"Status",         type:"select", options:["Active","Inactive","Visitor","Moved"], filter:true },
   { key:"lastName",  label:"Last name",      type:"text", locked:true },
   { key:"firstName", label:"First name",     type:"text", locked:true },
-  { key:"koreanName",label:"Korean name",    type:"text", card:true },
-  { key:"title",     label:"Title",          type:"select", options:["목사","전도사","장로","권사","안수집사","서리집사","성도"], card:true },
-  { key:"phone",     label:"Phone number",   type:"tel" },
+  { key:"koreanName",label:"Other name",     type:"text", card:true },
+  { key:"department",label:"Department(부서)", type:"select",
+    options:["Youth Local","Youth Away","EM Local","EM Away","Staff","1선교회","2선교회"], filter:true, card:true },
+  { key:"title",     label:"Title",          type:"select", options:["목사","전도사","장로","권사","안수집사","서리집사","성도"] },
   { key:"birthday",  label:"Birthday",       type:"date", card:true, fmt:"monthday" },
-  { key:"address",   label:"Address",        type:"text", wide:true },
   { key:"hometown",  label:"Hometown",       type:"text", card:true },
+  { key:"phone",     label:"Phone number",   type:"tel" },
+  { key:"address",   label:"Address",        type:"text", wide:true },
+  { key:"joined",    label:"Date joined",    type:"date" },
+  { key:"baptized",  label:"Baptized",       type:"select",
+    options:["Infant Baptized","Baptized","Confirmed","None","Unknown"],
+    optionsKo:["유아세례","세례","입교","없음","모름"], filter:true },
   { key:"email",     label:"Email address",  type:"email" },
-  { key:"baptized",  label:"Baptized",       type:"select", options:["Infant Baptized","Baptized","Confirmed","None","Unknown"], optionsKo:["유아세례","세례","입교","없음","모름"] },
-  { key:"infantBaptismDate", label:"Infant baptism date", type:"date" },
+  { key:"infantBaptismDate", label:"Infant baptism date(유아세례일)", type:"date" },
   { key:"baptismDate",       label:"Baptism date",        type:"date" },
   { key:"confirmationDate",  label:"Confirmation date",   type:"date" },
-  { key:"joined",    label:"Date joined",    type:"date" },
-  { key:"department",label:"Department",     type:"select", options:["Worship","Education","Youth","Children","Missions","Administration"], filter:true },
-  { key:"smallGroup",label:"Small group",    type:"text" },
-  { key:"status",    label:"Current status", type:"select", options:["Active","Inactive","Visitor","Moved"], filter:true },
   { key:"notes",     label:"Note",           type:"textarea", wide:true },
 ];
 let MEMBER_FIELDS = DEFAULT_FIELDS;
@@ -505,6 +525,32 @@ const toEmail = v => v.includes("@") ? v : v + ID_DOMAIN;
 const toDisplay = v => v.endsWith(ID_DOMAIN) ? v.slice(0, -ID_DOMAIN.length) : v;
 
 const REL_TYPES = ["Spouse","Parent","Child","Sibling","Grandparent","Grandchild","Other"];
+const REL_KO = { Spouse:"배우자", Parent:"부모", Child:"자녀", Sibling:"형제자매",
+                 Grandparent:"조부모", Grandchild:"손자녀", Other:"기타" };
+const INVERSE = { Spouse:"Spouse", Parent:"Child", Child:"Parent", Sibling:"Sibling",
+                  Grandparent:"Grandchild", Grandchild:"Grandparent", Other:"Other" };
+
+/* Relations that follow from the parent links but are not stored yet:
+   people who share a parent, and the parents of a parent. */
+function relsOf(m, rel){
+  return ((m && m.family) || []).filter(f => f.rel === rel)
+    .map(f => members.find(x => x.id === f.id)).filter(Boolean);
+}
+function inferredRelations(m){
+  const known = new Set(((m.family) || []).map(f => f.id));
+  const out = new Map();
+  const add = (person, rel) => {
+    if (!person || person.id === m.id || known.has(person.id) || out.has(person.id)) return;
+    out.set(person.id, { m: person, rel });
+  };
+  const parents = relsOf(m, "Parent");
+  parents.forEach(p => {
+    relsOf(p, "Child").forEach(c => add(c, "Sibling"));      // shares a parent
+    relsOf(p, "Parent").forEach(g => add(g, "Grandparent")); // parent of a parent
+  });
+  relsOf(m, "Child").forEach(c => relsOf(c, "Child").forEach(g => add(g, "Grandchild")));
+  return [...out.values()];
+}
 const REL_INVERSE = {"Spouse":"Spouse","Parent":"Child","Child":"Parent","Sibling":"Sibling","Grandparent":"Grandchild","Grandchild":"Grandparent","Other":"Other"};
 
 const fullName = m => [m.firstName, m.lastName].filter(Boolean).join(" ") || m.name || "(No name)";
@@ -796,6 +842,15 @@ function openDetail(id){
     const t = members.find(x => x.id === f.id);
     return t ? `<span class="fam-chip" data-id="${t.id}"><b>${esc(fullName(t))}</b><span>${esc(f.rel)}</span></span>` : "";
   }).join("");
+  const guessed = inferredRelations(m);
+  const guessHTML = guessed.length ? `
+    <div class="fam-box guess-box">
+      <h3>${lang==="ko" ? "추정 관계 (부모 관계에서 계산)" : "Suggested (from parent relations)"}</h3>
+      ${guessed.map(g => `<span class="fam-chip guess" data-id="${g.m.id}">
+          <b>${esc(fullName(g.m))}</b><span>${esc(lang==="ko" ? REL_KO[g.rel] || g.rel : g.rel)}${personLabel(g.m)?" · "+esc(personLabel(g.m)):""}</span>
+          ${myRole==="admin" ? `<button class="guess-add" data-rel="${g.rel}" data-target="${g.m.id}" title="${lang==="ko"?"관계로 등록":"Save as a relation"}">＋</button>` : ""}
+        </span>`).join("")}
+    </div>` : "";
   $("detailBody").innerHTML = `
     <div class="detail-top">
       ${m.photo ? `<img src="${m.photo}" alt="">` : `<div class="no-photo">${esc(initial(m))}</div>`}
@@ -805,6 +860,7 @@ function openDetail(id){
       </div>
     </div>
     ${fam?`<div class="fam-box"><h3>Family</h3>${fam}</div>`:""}
+    ${guessHTML}
     ${m.notes?`<div class="memo-box">${esc(m.notes)}</div>`:""}`;
   $("detailFoot").innerHTML = myRole === "admin"
     ? `<button class="btn btn-danger btn-sm" id="delBtn">Delete</button>
@@ -813,8 +869,37 @@ function openDetail(id){
     $("editOpenBtn").onclick = () => { $("detailOverlay").hidden = true; openEdit(id); };
     $("delBtn").onclick = () => deleteMember(id);
   }
-  $("detailBody").querySelectorAll(".fam-chip").forEach(c => c.onclick = () => openDetail(c.dataset.id));
+  $("detailBody").querySelectorAll(".fam-chip").forEach(c => c.onclick = e => {
+    if (e.target.closest(".guess-add")) return;
+    openDetail(c.dataset.id);
+  });
+  $("detailBody").querySelectorAll(".guess-add").forEach(b => b.onclick = async e => {
+    e.stopPropagation();
+    b.disabled = true;
+    await saveRelation(m.id, b.dataset.target, b.dataset.rel);
+    setTimeout(() => openDetail(m.id), 400);
+  });
   $("detailOverlay").hidden = false;
+}
+
+/* Writes a relation on both members, the same way saving the form does. */
+async function saveRelation(aId, bId, rel){
+  const a = members.find(x => x.id === aId), b = members.find(x => x.id === bId);
+  if (!a || !b) return;
+  const famA = [...(a.family || [])];
+  const famB = [...(b.family || [])];
+  if (!famA.some(f => f.id === bId)) famA.push({ id: bId, rel });
+  const inv = INVERSE[rel] || "Other";
+  if (!famB.some(f => f.id === aId)) famB.push({ id: aId, rel: inv });
+  try {
+    const batch = db.batch();
+    batch.update(db.collection("members").doc(aId), { family: famA });
+    batch.update(db.collection("members").doc(bId), { family: famB });
+    await batch.commit();
+    toast(lang === "ko" ? "관계를 등록했습니다" : "Relation saved");
+  } catch(e) {
+    alert(lang === "ko" ? "저장에 실패했습니다. 관리자 권한을 확인해 주세요." : "Could not save. Please check your admin permissions.");
+  }
 }
 
 /* ---------- photo compression ---------- */
@@ -903,17 +988,80 @@ function withHometown(data){
   return data;
 }
 
+/* One line of the family editor. The person is picked by searching rather than
+   scrolling a list of every member, so people with the same name stay apart. */
+function personLabel(m){
+  const bits = [];
+  if (m.koreanName) bits.push(m.koreanName);
+  if (m.department) bits.push(m.department);
+  const y = /^(\d{4})-/.exec(m.birthday || "");
+  if (y) bits.push(y[1]);
+  return bits.join(" · ");
+}
+function personChipHTML(m){
+  return `${m.photo ? `<img src="${m.photo}" alt="">` : `<span class="pp-none">${esc(initial(m))}</span>`}
+    <span class="pp-name">${esc(fullName(m))}</span>
+    <span class="pp-meta">${esc(personLabel(m))}</span>`;
+}
 function relRowHTML(rel = "", targetId = ""){
-  const opts = members.filter(m => m.id !== editingId)
-    .sort((a,b)=>fullName(a).localeCompare(fullName(b),"en"))
-    .map(m => `<option value="${m.id}"${m.id===targetId?" selected":""}>${esc(fullName(m))}</option>`).join("");
+  const t = targetId ? members.find(m => m.id === targetId) : null;
   return `<div class="rel-row">
-    <select class="rel-type">${REL_TYPES.map(t=>`<option${t===rel?" selected":""}>${t}</option>`).join("")}</select>
-    <select class="rel-target"><option value="">Select person</option>${opts}</select>
-    <button class="btn btn-sm" type="button" onclick="this.parentElement.remove()">✕</button>
+    <select class="rel-type">${REL_TYPES.map(x=>`<option${x===rel?" selected":""}>${x}</option>`).join("")}</select>
+    <div class="rel-pick">
+      <input type="hidden" class="rel-target" value="${targetId}">
+      <div class="pp-chosen"${t?"":' hidden'}>${t ? personChipHTML(t) : ""}
+        <button class="btn btn-sm pp-clear" type="button">Change</button></div>
+      <div class="pp-search"${t?' hidden':''}>
+        <input class="pp-input" type="search" placeholder="Search by name" autocomplete="off">
+        <div class="pp-results" hidden></div>
+      </div>
+    </div>
+    <button class="btn btn-sm" type="button" onclick="this.closest('.rel-row').remove()">✕</button>
   </div>`;
 }
-$("relAddBtn").onclick = () => $("relRows").insertAdjacentHTML("beforeend", relRowHTML());
+function bindRelRow(row){
+  const hidden = row.querySelector(".rel-target");
+  const input  = row.querySelector(".pp-input");
+  const list   = row.querySelector(".pp-results");
+  const chosen = row.querySelector(".pp-chosen");
+  const search = row.querySelector(".pp-search");
+
+  const choose = m => {
+    hidden.value = m.id;
+    chosen.innerHTML = personChipHTML(m) + `<button class="btn btn-sm pp-clear" type="button">Change</button>`;
+    chosen.hidden = false; search.hidden = true; list.hidden = true;
+    chosen.querySelector(".pp-clear").onclick = () => {
+      hidden.value = ""; chosen.hidden = true; search.hidden = false;
+      input.value = ""; list.hidden = true; input.focus();
+    };
+  };
+  const clear = chosen.querySelector(".pp-clear");
+  if (clear) clear.onclick = () => {
+    hidden.value = ""; chosen.hidden = true; search.hidden = false; input.value = ""; input.focus();
+  };
+
+  input.oninput = () => {
+    const q = input.value.trim().toLowerCase();
+    if (!q) { list.hidden = true; return; }
+    const hits = members
+      .filter(m => m.id !== editingId)
+      .filter(m => (fullName(m) + " " + (m.koreanName||"")).toLowerCase().includes(q))
+      .slice(0, 8);
+    list.innerHTML = hits.length
+      ? hits.map(m => `<div class="pp-item" data-id="${m.id}">${personChipHTML(m)}</div>`).join("")
+      : `<div class="pp-empty">No match</div>`;
+    list.hidden = false;
+    list.querySelectorAll(".pp-item").forEach(el =>
+      el.onclick = () => choose(members.find(m => m.id === el.dataset.id)));
+  };
+  input.onblur = () => setTimeout(() => { list.hidden = true; }, 180);
+  input.onfocus = () => { if (input.value.trim()) input.oninput(); };
+}
+function addRelRow(rel, id){
+  $("relRows").insertAdjacentHTML("beforeend", relRowHTML(rel, id));
+  bindRelRow($("relRows").lastElementChild);
+}
+$("relAddBtn").onclick = () => addRelRow();
 
 function openEdit(id){
   editingId = id;
@@ -923,7 +1071,8 @@ function openEdit(id){
   editPhotoData = (m && m.photo) || "";
   $("editPhotoPreview").src = editPhotoData;
   $("editPhotoFile").value = "";
-  $("relRows").innerHTML = ((m && m.family) || []).map(f => relRowHTML(f.rel, f.id)).join("");
+  $("relRows").innerHTML = "";
+  ((m && m.family) || []).forEach(f => addRelRow(f.rel, f.id));
   $("editOverlay").hidden = false;
 }
 
@@ -1214,7 +1363,8 @@ function startFieldConfig(){
           if (d && d.card) { f.card = true; if (d.fmt) f.fmt = d.fmt; }
         });
       }
-      // one-time: introduce the Title field and the current card layout
+      // one-time migrations below only run on configurations saved before these
+      // fields existed; a configuration edited in ⚙ Fields is never overwritten.
       if (!MEMBER_FIELDS.some(f => f.key === "title")) {
         const tf = DEFAULT_FIELDS.find(f => f.key === "title");
         const at = MEMBER_FIELDS.findIndex(f => f.key === "koreanName");
