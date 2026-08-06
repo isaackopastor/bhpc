@@ -93,6 +93,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 .mcard .no-photo{width:100%;aspect-ratio:3/3.4;border-radius:6px;background:#EDEAE0;display:flex;align-items:center;justify-content:center;font-family:var(--font-serif);font-size:34px;color:#B9B29F}
 .mcard .name{font-family:var(--font-serif);font-size:17.5px;font-weight:700;margin-top:9px;color:var(--pine-deep)}
 .mcard .name .kname{font-size:14.5px;font-weight:400;color:var(--ink-soft)}
+.mcard .name .ktitle{font-family:var(--font-body);font-size:12px;font-weight:600;color:var(--gold);border:1px solid var(--gold);border-radius:10px;padding:0 7px;vertical-align:2px;white-space:nowrap}
 .mcard .meta{font-size:12.5px;color:var(--ink-soft);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ---------- modal ---------- */
@@ -158,6 +159,9 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 .field-row .fr-type{width:auto}
 .field-row .fr-options{flex-basis:100%}
 .field-row .fr-filterwrap{flex-basis:100%;font-size:12.5px;color:var(--ink-soft);margin:0}
+.field-row .fr-cardwrap{flex-basis:100%;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--ink-soft)}
+.field-row .fr-cardwrap .check-inline{margin:0;font-size:12.5px;color:var(--ink-soft)}
+.field-row .fr-fmt{width:auto;font-size:12.5px;padding:3px 6px}
 .field-row .btn-danger{align-self:center}
 
 /* ---------- print ---------- */
@@ -462,12 +466,14 @@ const CHURCH_SUB  = "BEAUTIFUL HILL PRESBYTERIAN CHURCH";
 const DEFAULT_FIELDS = [
   { key:"lastName",  label:"Last name",      type:"text", locked:true },
   { key:"firstName", label:"First name",     type:"text", locked:true },
-  { key:"koreanName",label:"Korean name",    type:"text" },
-  { key:"phone",     label:"Phone number",   type:"tel",  card:true },
+  { key:"koreanName",label:"Korean name",    type:"text", card:true },
+  { key:"title",     label:"Title",          type:"select", options:["목사","전도사","장로","권사","안수집사","서리집사","성도"], card:true },
+  { key:"phone",     label:"Phone number",   type:"tel" },
+  { key:"birthday",  label:"Birthday",       type:"date", card:true, fmt:"monthday" },
   { key:"address",   label:"Address",        type:"text", wide:true },
+  { key:"hometown",  label:"Hometown",       type:"text", card:true },
   { key:"email",     label:"Email address",  type:"email" },
   { key:"baptized",  label:"Baptized",       type:"select", options:["Yes","No"] },
-  { key:"birthday",  label:"Birthday",       type:"date" },
   { key:"joined",    label:"Date joined",    type:"date" },
   { key:"department",label:"Department",     type:"select", options:["Worship","Education","Youth","Children","Missions","Administration"], filter:true },
   { key:"smallGroup",label:"Small group",    type:"text" },
@@ -553,9 +559,26 @@ function startMembers(){
   unsubMembers = db.collection("members").onSnapshot(snap => {
     members = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     render();
+    backfillHometowns();
   }, err => {
     $("grid").innerHTML = `<p style="grid-column:1/-1;color:var(--danger)">Could not load data. Please check your access permissions.</p>`;
   });
+}
+/* Fills in Hometown from the address for members saved before the field existed.
+   Runs once per session, admins only. */
+let backfillDone = false;
+async function backfillHometowns(){
+  if (backfillDone || myRole !== "admin") return;
+  if (!MEMBER_FIELDS.some(f => f.key === "hometown")) return;
+  const todo = members.filter(m => !m.hometown && m.address && cityOf(m.address));
+  if (!todo.length) { backfillDone = true; return; }
+  backfillDone = true;
+  try {
+    const batch = db.batch();
+    todo.forEach(m => batch.update(db.collection("members").doc(m.id), { hometown: cityOf(m.address) }));
+    await batch.commit();
+    toast(lang === "ko" ? `${todo.length}명의 Hometown을 주소에서 채웠습니다` : `Filled in Hometown for ${todo.length} member(s)`);
+  } catch(e) { backfillDone = false; }
 }
 
 /* ---------- filtering & sorting ---------- */
@@ -595,11 +618,28 @@ function sortList(list, mode){
 /* ---------- render grid ---------- */
 function cityOf(addr){
   if (!addr) return "";
-  const parts = addr.split(",").map(s => s.trim()).filter(Boolean);
-  const isStateZip = s => /^[A-Za-z]{2}\.?\s*\d{5}/.test(s) || /^[A-Z]{2}$/.test(s) || /^\d{5}/.test(s);
-  if (parts.length === 1) return parts[0];
-  if (parts.length === 2) return isStateZip(parts[1]) ? parts[0] : parts[1];
-  return isStateZip(parts[parts.length-1]) ? parts[parts.length-2] : parts[parts.length-1];
+  let s = String(addr).trim().replace(/\s+/g, " ");
+  const STREET = /\b(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|way|ct|court|pl|place|cir|circle|pkwy|parkway|hwy|highway|apt|unit|ste|suite)\b\.?/gi;
+  const stripStreet = x => {
+    x = x.replace(/^\d+[A-Za-z]?\s+/, "").trim();
+    const hits = [...x.matchAll(STREET)];
+    if (hits.length) {
+      const h = hits[hits.length - 1];
+      const after = x.slice(h.index + h[0].length).replace(/^[\s,#\d]+/, "").trim();
+      if (after) return after;
+    }
+    return x;
+  };
+
+  // "… City, CA 90703" or "… City CA 90703" — the city sits before the state + ZIP
+  const m = s.match(/([A-Za-z][A-Za-z .'\-]*?)[,\s]+([A-Za-z]{2})\.?[,\s]+\d{5}(?:-\d{4})?\s*$/);
+  if (m) return stripStreet(m[1]);
+
+  // no ZIP: drop a trailing state abbreviation, then use the comma structure
+  s = s.replace(/[,\s]+[A-Za-z]{2}\.?\s*$/, "").replace(/\s+\d{5}(?:-\d{4})?\s*$/, "").trim();
+  const parts = s.split(",").map(x => x.trim()).filter(Boolean);
+  if (parts.length > 1) return parts[parts.length - 1];
+  return stripStreet(s);
 }
 function optionsFor(key){
   const f = MEMBER_FIELDS.find(x => x.key === key);
@@ -626,18 +666,35 @@ function renderFilters(){
   $("groupSel").innerHTML = `<option value="">${t("noGrouping")}</option>` +
     groupable.map(f => `<option value="${f.key}"${f.key===curG?" selected":""}>${t("groupBy")} — ${esc(f.label)}</option>`).join("");
 }
+function cardValue(m, f){
+  let v = m[f.key] || "";
+  if (f.key === "hometown" && !v && m.address) v = cityOf(m.address);   // until the backfill runs
+  if (!v) return "";
+  if (f.type === "date") {
+    if (!/^\d{4}-\d{2}-\d{2}/.test(v)) return v;
+    const d = new Date(v + "T12:00:00");
+    const loc = lang === "ko" ? "ko-KR" : "en-US";
+    return f.fmt === "full"
+      ? d.toLocaleDateString(loc, { year:"numeric", month:"short", day:"numeric" })
+      : "🎂 " + d.toLocaleDateString(loc, { month:"short", day:"numeric" });
+  }
+  if (f.key === "address" && f.fmt !== "full") return cityOf(v);
+  return v;
+}
 function memberCardHTML(m){
   const nameLF = [m.lastName, m.firstName].filter(Boolean).join(" ") || fullName(m);
-  const kn = m.koreanName ? ` <span class="kname">${esc(m.koreanName)}</span>` : "";
-  const bd = /^\d{4}-\d{2}-\d{2}/.test(m.birthday||"")
-    ? new Date(m.birthday+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "";
+  const knField = MEMBER_FIELDS.find(f => f.key === "koreanName" && f.card);
+  const kn = (knField && m.koreanName) ? ` <span class="kname">${esc(m.koreanName)}</span>` : "";
+  const tField = MEMBER_FIELDS.find(f => f.key === "title" && f.card);
+  const ti = (tField && m.title) ? ` <span class="ktitle">${esc(m.title)}</span>` : "";
+  const rows = MEMBER_FIELDS
+    .filter(f => f.card && !["lastName","firstName","koreanName","title"].includes(f.key))
+    .map(f => `<div class="meta">${esc(cardValue(m, f)) || "　"}</div>`).join("");
   return `
     <div class="mcard" data-id="${m.id}" tabindex="0" role="button" aria-label="View details for ${esc(fullName(m))}">
       ${m.photo ? `<img class="photo" src="${m.photo}" alt="">` : `<div class="no-photo">${esc(initial(m))}</div>`}
-      <div class="name">${esc(nameLF)}${kn}</div>
-      <div class="meta">${esc(m.phone || "　")}</div>
-      <div class="meta">${bd ? "🎂 " + bd : "　"}</div>
-      <div class="meta">${esc(cityOf(m.address) || "　")}</div>
+      <div class="name">${esc(nameLF)}${kn}${ti}</div>
+      ${rows}
     </div>`;
 }
 function render(){
@@ -795,6 +852,14 @@ function buildForm(m){
 function readForm(){
   const data = {};
   MEMBER_FIELDS.forEach(f => data[f.key] = ($("fld_"+f.key).value || "").trim());
+  return withHometown(data);
+}
+/* Hometown is derived from the address when left blank, so cards can show a
+   city without every account needing access to the full street address. */
+function withHometown(data){
+  if (MEMBER_FIELDS.some(f => f.key === "hometown") && !data.hometown && data.address) {
+    data.hometown = cityOf(data.address);
+  }
   return data;
 }
 
@@ -1102,6 +1167,31 @@ function startFieldConfig(){
   unsubFields = db.collection("config").doc("fields").onSnapshot(doc => {
     if (doc.exists && Array.isArray(doc.data().fields) && doc.data().fields.length) {
       MEMBER_FIELDS = doc.data().fields;
+      // configs saved before card settings existed: fall back to the defaults
+      if (!MEMBER_FIELDS.some(f => f.card)) {
+        MEMBER_FIELDS.forEach(f => {
+          const d = DEFAULT_FIELDS.find(x => x.key === f.key);
+          if (d && d.card) { f.card = true; if (d.fmt) f.fmt = d.fmt; }
+        });
+      }
+      // one-time: introduce the Title field and the current card layout
+      if (!MEMBER_FIELDS.some(f => f.key === "title")) {
+        const tf = DEFAULT_FIELDS.find(f => f.key === "title");
+        const at = MEMBER_FIELDS.findIndex(f => f.key === "koreanName");
+        MEMBER_FIELDS.splice(at >= 0 ? at + 1 : MEMBER_FIELDS.length, 0, JSON.parse(JSON.stringify(tf)));
+        MEMBER_FIELDS.forEach(f => {
+          if (f.key === "phone") delete f.card;
+          if (f.key === "koreanName") f.card = true;
+          if (f.key === "birthday") { f.card = true; f.fmt = f.fmt || "monthday"; }
+        });
+      }
+      // one-time: introduce Hometown and keep the full address off the cards
+      if (!MEMBER_FIELDS.some(f => f.key === "hometown")) {
+        const hf = DEFAULT_FIELDS.find(f => f.key === "hometown");
+        const at = MEMBER_FIELDS.findIndex(f => f.key === "address");
+        MEMBER_FIELDS.splice(at >= 0 ? at + 1 : MEMBER_FIELDS.length, 0, JSON.parse(JSON.stringify(hf)));
+        MEMBER_FIELDS.forEach(f => { if (f.key === "address") { delete f.card; delete f.fmt; } });
+      }
     } else {
       MEMBER_FIELDS = DEFAULT_FIELDS;
     }
@@ -1139,6 +1229,17 @@ function renderFieldRows(){
           ? `<input class="fr-options" placeholder="Options, separated by commas" value="${esc((f.options||[]).join(", "))}">
              <label class="check-inline fr-filterwrap"><input type="checkbox" class="fr-filter"${f.filter?" checked":""}>Show as filter on the main screen</label>`
           : ``}
+        ${f.locked ? `` : `<div class="fr-cardwrap">
+          <label class="check-inline"><input type="checkbox" class="fr-card"${f.card?" checked":""}>Show on member cards</label>
+          ${f.card && f.type==="date" ? `<select class="fr-fmt">
+              <option value="monthday"${f.fmt!=="full"?" selected":""}>Month/day only</option>
+              <option value="full"${f.fmt==="full"?" selected":""}>Full date</option>
+            </select>` : ``}
+          ${f.card && f.key==="address" ? `<select class="fr-fmt">
+              <option value="city"${f.fmt!=="full"?" selected":""}>City only</option>
+              <option value="full"${f.fmt==="full"?" selected":""}>Full address</option>
+            </select>` : ``}
+        </div>`}
       </div>
       ${f.locked
         ? `<span class="hint" style="align-self:center">used for names</span>`
@@ -1169,6 +1270,13 @@ function renderFieldRows(){
     if (fil) fil.onchange = e => {
       if (e.target.checked) draftFields[i].filter = true; else delete draftFields[i].filter;
     };
+    const crd = row.querySelector(".fr-card");
+    if (crd) crd.onchange = e => {
+      if (e.target.checked) draftFields[i].card = true; else { delete draftFields[i].card; delete draftFields[i].fmt; }
+      renderFieldRows();
+    };
+    const fmt = row.querySelector(".fr-fmt");
+    if (fmt) fmt.onchange = e => { draftFields[i].fmt = e.target.value; };
     const opt = row.querySelector(".fr-options");
     if (opt) opt.oninput = e => {
       draftFields[i].options = e.target.value.split(",").map(s=>s.trim()).filter(Boolean);
@@ -1289,6 +1397,7 @@ $("doImportBtn").onclick = async () => {
       if (skipDup && existing.has(sig)) { skipped++; continue; }
       const data = {};
       MEMBER_FIELDS.forEach(f => data[f.key] = row[f.key] || "");
+      withHometown(data);
       data.photo = ""; data.family = [];
       data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       batch.set(db.collection("members").doc(), data);
