@@ -134,6 +134,10 @@ tr.sec-row td .cnt{font-family:var(--font-body);font-weight:400;font-size:12.5px
 .hist-item .btn{padding:2px 9px;font-size:12px;white-space:nowrap}
 .hist-name{font-weight:700;color:var(--pine-deep);cursor:pointer}
 .hist-name:hover{text-decoration:underline}
+.hist-group{padding:8px 12px 4px}
+.hist-group .hist-item{border:none;border-bottom:1px solid #F0ECE1;border-radius:0;margin:0;padding:9px 2px;background:transparent}
+.hist-group .hist-item:last-child{border-bottom:none}
+.hist-group .hist-item.done{background:transparent;opacity:.75}
 .att-dots{display:flex;gap:4px;flex-wrap:wrap}
 .dot{width:16px;height:16px;border-radius:4px;background:#EFECE3;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
 .dot.y{background:var(--ok)}
@@ -227,6 +231,10 @@ tr.sec-row td .cnt{font-family:var(--font-body);font-weight:400;font-size:12.5px
           <option value="">All time</option>
           <option value="90">Last 3 months</option>
           <option value="365">Last 12 months</option>
+        </select>
+        <select id="histGroup">
+          <option value="member">Group by member</option>
+          <option value="flat">All topics by date</option>
         </select>
         <span class="att-sum" id="histSum"></span>
       </div>
@@ -592,7 +600,7 @@ function renderPray(){
 }
 
 /* ---------- prayer history tab (everything, open and answered) ---------- */
-["histSearch","histDept","histState","histRange"].forEach(id => $(id).addEventListener("input", renderHist));
+["histSearch","histDept","histState","histRange","histGroup"].forEach(id => $(id).addEventListener("input", renderHist));
 function renderHist(){
   fillSelect("histDept", "department", "All departments");
   const q = $("histSearch").value.trim().toLowerCase();
@@ -613,15 +621,16 @@ function renderHist(){
   list.sort((a,b) => (b.answeredOn || b.date || "").localeCompare(a.answeredOn || a.date || ""));
 
   const answered = list.filter(p => p.answeredOn).length;
-  $("histSum").textContent = `${list.length} topic(s) · ${answered} answered`;
-  $("histList").innerHTML = list.map(p => {
+
+  /* One row. In the grouped view the member name is already in the header above. */
+  const rowHTML = (p, withName) => {
     const m = memberOf(p.memberId);
     return `<div class="hist-item${p.answeredOn?" done":""}">
       <span class="d">${esc(p.date)}</span>
       <span class="txt">
-        <span class="hist-name" data-id="${m.id}">${esc(fullName(m))}</span>
-        ${m.department?`<span class="pray-dep">${esc(m.department)}</span>`:""}
-        <br>${p.answeredOn?`<s>${esc(p.text||"")}</s>`:esc(p.text||"")}
+        ${withName ? `<span class="hist-name" data-id="${m.id}">${esc(fullName(m))}</span>
+          ${m.department?`<span class="pray-dep">${esc(m.department)}</span>`:""}<br>` : ""}
+        ${p.answeredOn?`<s>${esc(p.text||"")}</s>`:esc(p.text||"")}
         ${p.answerNote?`<br><span class="ans-note">↳ ${esc(p.answerNote)}</span>`:""}
       </span>
       ${p.answeredOn
@@ -629,9 +638,37 @@ function renderHist(){
            <button class="btn btn-sm p-reopen" data-id="${p.id}">Reopen</button>`
         : `<button class="btn btn-sm p-answer" data-id="${p.id}">✓ Answered</button>`}
     </div>`;
-  }).join("") || `<p class="stat">Nothing to show.</p>`;
+  };
+
+  if ($("histGroup").value === "member") {
+    // each member's own topics, oldest first so the story reads top to bottom
+    const byMember = new Map();
+    list.forEach(p => {
+      if (!byMember.has(p.memberId)) byMember.set(p.memberId, []);
+      byMember.get(p.memberId).push(p);
+    });
+    const groups = [...byMember.entries()]
+      .map(([id, ps]) => ({ m: memberOf(id), list: ps.sort((a,b) => (a.date||"").localeCompare(b.date||"")) }))
+      .sort((a,b) => fullName(a.m).localeCompare(fullName(b.m), "en"));
+    $("histSum").textContent = `${list.length} topic(s) · ${answered} answered · ${groups.length} member(s)`;
+    $("histList").innerHTML = groups.map(g => {
+      const open_ = g.list.filter(p => !p.answeredOn).length;
+      return `<div class="pray-card">
+        <div class="pray-head" data-id="${g.m.id}">
+          <b>${esc(fullName(g.m))}</b>${g.m.koreanName?` <span class="stat">${esc(g.m.koreanName)}</span>`:""}
+          ${g.m.department?`<span class="pray-dep">${esc(g.m.department)}</span>`:""}
+          <span class="stat" style="margin-left:auto">${g.list.length} total · ${open_} open</span>
+        </div>
+        <div class="hist-group">${g.list.map(p => rowHTML(p, false)).join("")}</div>
+      </div>`;
+    }).join("") || `<p class="stat">Nothing to show.</p>`;
+  } else {
+    $("histSum").textContent = `${list.length} topic(s) · ${answered} answered`;
+    $("histList").innerHTML = list.map(p => rowHTML(p, true)).join("") || `<p class="stat">Nothing to show.</p>`;
+  }
 
   $("histList").querySelectorAll(".hist-name").forEach(n => n.onclick = () => openMember(n.dataset.id));
+  $("histList").querySelectorAll(".pray-head").forEach(h => h.onclick = () => openMember(h.dataset.id));
   $("histList").querySelectorAll(".p-answer").forEach(b => b.onclick = async () => {
     await markAnswered(b.dataset.id); setTimeout(renderHist, 400);
   });
