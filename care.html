@@ -111,6 +111,29 @@ tr.sec-row td .cnt{font-family:var(--font-body);font-weight:400;font-size:12.5px
 .log .del:hover{color:var(--danger)}
 .prayer-current{background:var(--gold-soft);border:1px solid #E2D5AE;border-radius:8px;padding:10px 12px;margin-bottom:10px;white-space:pre-wrap;font-size:14px}
 .prayer-current .lbl{font-size:11px;font-weight:700;color:var(--gold);letter-spacing:.1em;display:block;margin-bottom:3px}
+.prayer-current{position:relative}
+.prayer-acts{display:flex;gap:6px;align-items:center;margin-top:8px}
+.prayer-acts .btn{padding:3px 10px;font-size:12.5px}
+.ans-tag{display:inline-block;font-size:11.5px;font-weight:700;color:var(--ok);border:1px solid var(--ok);border-radius:10px;padding:0 8px;margin-left:6px;white-space:nowrap}
+.ans-note{font-size:12.5px;color:var(--ok)}
+/* prayer tabs */
+.pray-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden}
+.pray-head{display:flex;align-items:center;gap:8px;padding:9px 14px;background:var(--paper);border-bottom:1px solid var(--line);cursor:pointer;font-size:14px}
+.pray-head:hover{background:#F3F0E7}
+.pray-head b{color:var(--pine-deep)}
+.pray-dep{font-size:11.5px;color:var(--ink-soft);border:1px solid var(--line);border-radius:10px;padding:0 8px;margin-left:4px}
+.pray-item{display:flex;gap:10px;align-items:flex-start;padding:9px 14px;border-bottom:1px solid #F0ECE1;font-size:13.5px}
+.pray-item:last-child{border-bottom:none}
+.pray-item .d{color:var(--ink-soft);flex:0 0 88px;font-size:12.5px}
+.pray-item .txt{flex:1;white-space:pre-wrap}
+.pray-item .btn{padding:2px 9px;font-size:12px;white-space:nowrap}
+.hist-item{display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:10px 14px;margin-bottom:7px;font-size:13.5px}
+.hist-item.done{background:#FBFAF6}
+.hist-item .d{color:var(--ink-soft);flex:0 0 88px;font-size:12.5px}
+.hist-item .txt{flex:1;white-space:pre-wrap}
+.hist-item .btn{padding:2px 9px;font-size:12px;white-space:nowrap}
+.hist-name{font-weight:700;color:var(--pine-deep);cursor:pointer}
+.hist-name:hover{text-decoration:underline}
 .att-dots{display:flex;gap:4px;flex-wrap:wrap}
 .dot{width:16px;height:16px;border-radius:4px;background:#EFECE3;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
 .dot.y{background:var(--ok)}
@@ -147,6 +170,8 @@ tr.sec-row td .cnt{font-family:var(--font-body);font-weight:400;font-size:12.5px
   <div class="tabs">
     <button class="tab active" data-tab="dash">Dashboard</button>
     <button class="tab" data-tab="att">Attendance</button>
+    <button class="tab" data-tab="pray">Prayer topics</button>
+    <button class="tab" data-tab="hist">Prayer history</button>
   </div>
   <main>
     <section id="tab-dash">
@@ -173,6 +198,39 @@ tr.sec-row td .cnt{font-family:var(--font-body);font-weight:400;font-size:12.5px
         </table>
       </div>
       <p class="att-sum" style="margin-top:8px">Click a member to add records. Color guide: <span class="pill p-ok">recent</span> <span class="pill p-amber">getting old</span> <span class="pill p-bad">needs attention</span></p>
+    </section>
+
+    <section id="tab-pray" hidden>
+      <div class="dash-tools">
+        <input type="search" id="praySearch" placeholder="Search name or topic">
+        <select id="prayDept"><option value="">All departments</option></select>
+        <select id="praySort">
+          <option value="oldest">Sort: Oldest first</option>
+          <option value="newest">Sort: Newest first</option>
+          <option value="name">Sort: Name</option>
+        </select>
+        <span class="att-sum" id="praySum"></span>
+      </div>
+      <div id="prayList"></div>
+    </section>
+
+    <section id="tab-hist" hidden>
+      <div class="dash-tools">
+        <input type="search" id="histSearch" placeholder="Search name or topic">
+        <select id="histDept"><option value="">All departments</option></select>
+        <select id="histState">
+          <option value="">All topics</option>
+          <option value="open">Open only</option>
+          <option value="answered">Answered only</option>
+        </select>
+        <select id="histRange">
+          <option value="">All time</option>
+          <option value="90">Last 3 months</option>
+          <option value="365">Last 12 months</option>
+        </select>
+        <span class="att-sum" id="histSum"></span>
+      </div>
+      <div id="histList"></div>
     </section>
 
     <section id="tab-att" hidden>
@@ -368,12 +426,17 @@ function attendPct(mid){
 /* ---------- tabs ---------- */
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
   document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===t));
-  $("tab-dash").hidden = t.dataset.tab!=="dash";
-  $("tab-att").hidden = t.dataset.tab!=="att";
+  ["dash","att","pray","hist"].forEach(k => $("tab-"+k).hidden = t.dataset.tab !== k);
+  if (t.dataset.tab === "pray") renderPray();
+  if (t.dataset.tab === "hist") renderHist();
 });
 
 /* ---------- dashboard ---------- */
-function renderAll(){ renderDash(); renderAttGrid(); }
+function renderAll(){
+  renderDash(); renderAttGrid();
+  if (!$("tab-pray").hidden) renderPray();
+  if (!$("tab-hist").hidden) renderHist();
+}
 ["dashSearch","dashSort","dashDept","dashStatus"].forEach(id => $(id).addEventListener("input", renderDash));
 function renderDash(){
   fillSelect("dashDept", "department", "All departments");
@@ -390,7 +453,8 @@ function renderDash(){
   const stat = m => ({
     c: latest(contacts, m.id), p: latest(prayers, m.id), s: latest(services, m.id),
     a: attendPct(m.id),
-    sCount: services.filter(x=>x.memberId===m.id).length
+    sCount: services.filter(x=>x.memberId===m.id).length,
+    pOpen: prayers.filter(x=>x.memberId===m.id && !x.answeredOn).length
   });
   const cached = new Map(list.map(m => [m.id, stat(m)]));
   const sortMode = $("dashSort").value;
@@ -407,7 +471,7 @@ function renderDash(){
       <td class="mname">${esc(fullName(m))}${m.koreanName?` <span style="font-weight:400;color:var(--ink-soft)">${esc(m.koreanName)}</span>`:""}</td>
       <td>${att}</td>
       <td>${pill(st.c && st.c.date, 14, 21)}</td>
-      <td>${pill(st.p && st.p.date, 30, 60)}</td>
+      <td>${pill(st.p && st.p.date, 30, 60)}${st.pOpen?` <span style="color:var(--ink-soft);font-size:12px">${st.pOpen} open</span>`:""}</td>
       <td>${st.s ? `${pill(st.s.date, 90, 180)} <span style="color:var(--ink-soft);font-size:12px">×${st.sCount}</span>` : `<span class="pill p-none">never</span>`}</td>
     </tr>`;
   };
@@ -474,6 +538,107 @@ $("attSave").onclick = async () => {
     toast(`Attendance saved for ${d}`);
   } catch(e){ alert("Save failed. Check that your account has pastor access and the rules are updated."); }
 };
+
+/* ---------- prayer topics tab (open topics, grouped by member) ---------- */
+["praySearch","prayDept","praySort"].forEach(id => $(id).addEventListener("input", renderPray));
+function memberOf(id){ return members.find(m => m.id === id); }
+function renderPray(){
+  fillSelect("prayDept", "department", "All departments");
+  const q = $("praySearch").value.trim().toLowerCase();
+  const dep = $("prayDept").value;
+  const sort = $("praySort").value;
+
+  let open_ = prayers.filter(p => !p.answeredOn && memberOf(p.memberId));
+  if (dep) open_ = open_.filter(p => (memberOf(p.memberId).department||"") === dep);
+  if (q) open_ = open_.filter(p => {
+    const m = memberOf(p.memberId);
+    return ((p.text||"") + " " + fullName(m) + " " + (m.koreanName||"")).toLowerCase().includes(q);
+  });
+
+  const byMember = new Map();
+  open_.forEach(p => {
+    if (!byMember.has(p.memberId)) byMember.set(p.memberId, []);
+    byMember.get(p.memberId).push(p);
+  });
+  let groups = [...byMember.entries()].map(([id, list]) => ({
+    m: memberOf(id),
+    list: list.sort((a,b) => (b.date||"").localeCompare(a.date||"")),
+    newest: list.reduce((acc,p) => (p.date||"") > acc ? (p.date||"") : acc, "")
+  }));
+  if (sort === "oldest") groups.sort((a,b) => a.newest.localeCompare(b.newest));
+  if (sort === "newest") groups.sort((a,b) => b.newest.localeCompare(a.newest));
+  if (sort === "name")   groups.sort((a,b) => fullName(a.m).localeCompare(fullName(b.m),"en"));
+
+  $("praySum").textContent = `${open_.length} open topic(s) · ${groups.length} member(s)`;
+  $("prayList").innerHTML = groups.map(g => `
+    <div class="pray-card">
+      <div class="pray-head" data-id="${g.m.id}">
+        <b>${esc(fullName(g.m))}</b>${g.m.koreanName?` <span class="stat">${esc(g.m.koreanName)}</span>`:""}
+        ${g.m.department?`<span class="pray-dep">${esc(g.m.department)}</span>`:""}
+        <span class="stat" style="margin-left:auto">${agoText(g.newest)}</span>
+      </div>
+      ${g.list.map(p => `<div class="pray-item">
+        <span class="d">${esc(p.date)}</span>
+        <span class="txt">${esc(p.text||"")}</span>
+        <button class="btn btn-sm p-answer" data-id="${p.id}">✓ Answered</button>
+      </div>`).join("")}
+    </div>`).join("") || `<p class="stat">No open prayer topics.</p>`;
+
+  $("prayList").querySelectorAll(".pray-head").forEach(h => h.onclick = () => openMember(h.dataset.id));
+  $("prayList").querySelectorAll(".p-answer").forEach(b => b.onclick = async () => {
+    await markAnswered(b.dataset.id);
+    setTimeout(renderPray, 400);
+  });
+}
+
+/* ---------- prayer history tab (everything, open and answered) ---------- */
+["histSearch","histDept","histState","histRange"].forEach(id => $(id).addEventListener("input", renderHist));
+function renderHist(){
+  fillSelect("histDept", "department", "All departments");
+  const q = $("histSearch").value.trim().toLowerCase();
+  const dep = $("histDept").value, state = $("histState").value, range = $("histRange").value;
+
+  let list = prayers.filter(p => memberOf(p.memberId));
+  if (dep)   list = list.filter(p => (memberOf(p.memberId).department||"") === dep);
+  if (state === "open")     list = list.filter(p => !p.answeredOn);
+  if (state === "answered") list = list.filter(p =>  p.answeredOn);
+  if (range) {
+    const days = parseInt(range,10);
+    list = list.filter(p => { const d = daysAgo(p.answeredOn || p.date); return d !== null && d <= days; });
+  }
+  if (q) list = list.filter(p => {
+    const m = memberOf(p.memberId);
+    return ((p.text||"") + " " + (p.answerNote||"") + " " + fullName(m) + " " + (m.koreanName||"")).toLowerCase().includes(q);
+  });
+  list.sort((a,b) => (b.answeredOn || b.date || "").localeCompare(a.answeredOn || a.date || ""));
+
+  const answered = list.filter(p => p.answeredOn).length;
+  $("histSum").textContent = `${list.length} topic(s) · ${answered} answered`;
+  $("histList").innerHTML = list.map(p => {
+    const m = memberOf(p.memberId);
+    return `<div class="hist-item${p.answeredOn?" done":""}">
+      <span class="d">${esc(p.date)}</span>
+      <span class="txt">
+        <span class="hist-name" data-id="${m.id}">${esc(fullName(m))}</span>
+        ${m.department?`<span class="pray-dep">${esc(m.department)}</span>`:""}
+        <br>${p.answeredOn?`<s>${esc(p.text||"")}</s>`:esc(p.text||"")}
+        ${p.answerNote?`<br><span class="ans-note">↳ ${esc(p.answerNote)}</span>`:""}
+      </span>
+      ${p.answeredOn
+        ? `<span class="ans-tag">answered ${esc(p.answeredOn)}</span>
+           <button class="btn btn-sm p-reopen" data-id="${p.id}">Reopen</button>`
+        : `<button class="btn btn-sm p-answer" data-id="${p.id}">✓ Answered</button>`}
+    </div>`;
+  }).join("") || `<p class="stat">Nothing to show.</p>`;
+
+  $("histList").querySelectorAll(".hist-name").forEach(n => n.onclick = () => openMember(n.dataset.id));
+  $("histList").querySelectorAll(".p-answer").forEach(b => b.onclick = async () => {
+    await markAnswered(b.dataset.id); setTimeout(renderHist, 400);
+  });
+  $("histList").querySelectorAll(".p-reopen").forEach(b => b.onclick = async () => {
+    await reopenPrayer(b.dataset.id); setTimeout(renderHist, 400);
+  });
+}
 
 /* ---------- department manager (writes to the shared Directory field config) ---------- */
 $("deptMgrBtn").onclick = () => { renderDeptMgr(); $("dOverlay").hidden = false; };
@@ -544,12 +709,45 @@ function openMember(id){
   renderMember();
   $("mOverlay").hidden = false;
 }
+/* A single open prayer topic, with the button that marks it answered. */
+function prayerCardHTML(x){
+  return `<div class="prayer-current" data-pid="${x.id}">
+    <span class="lbl">${esc(x.date)}</span>${esc(x.text||"")}
+    <div class="prayer-acts">
+      <button class="btn btn-sm p-answer" data-id="${x.id}">✓ Answered</button>
+      <button class="del p-del" data-col="prayers" data-id="${x.id}">✕</button>
+    </div>
+  </div>`;
+}
+async function markAnswered(id){
+  const note = prompt("How was this prayer answered? (optional)", "");
+  if (note === null) return;
+  try {
+    await db.collection("prayers").doc(id).update({
+      answeredOn: todayISO(),
+      answerNote: note.trim()
+    });
+    toast("Marked as answered");
+  } catch(e){ alert("Save failed. Check pastor access and security rules."); }
+}
+async function reopenPrayer(id){
+  try {
+    await db.collection("prayers").doc(id).update({
+      answeredOn: firebase.firestore.FieldValue.delete(),
+      answerNote: firebase.firestore.FieldValue.delete()
+    });
+    toast("Reopened");
+  } catch(e){ alert("Save failed."); }
+}
+
 function renderMember(){
   const m = members.find(x=>x.id===curId);
   if (!m) return;
   $("mTitle").textContent = fullName(m) + (m.koreanName ? ` (${m.koreanName})` : "");
   const myC = contacts.filter(x=>x.memberId===curId).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const myP = prayers.filter(x=>x.memberId===curId).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const open_    = myP.filter(x => !x.answeredOn);
+  const answered = myP.filter(x =>  x.answeredOn);
   const myS = services.filter(x=>x.memberId===curId).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
   const weeks = recorded12();
   const dots = weeks.map(w => {
@@ -580,18 +778,21 @@ function renderMember(){
     </div>
 
     <div class="sec">
-      <h3>Prayer topics <span class="stat">${myP.length} total · updated: ${myP[0]?agoText(myP[0].date):"never"}</span></h3>
-      ${myP[0] ? `<div class="prayer-current"><span class="lbl">CURRENT · ${esc(myP[0].date)}</span>${esc(myP[0].text||"")}</div>` : ""}
-      <div class="addline">
+      <h3>Prayer topics <span class="stat">${open_.length} open · ${answered.length} answered · updated: ${myP[0]?agoText(myP[0].date):"never"}</span></h3>
+      ${open_.map(x => prayerCardHTML(x)).join("") || '<span class="stat">No open prayer topics.</span>'}
+      <div class="addline" style="margin-top:10px">
         <input type="date" id="pDate" value="${todayISO()}">
         <input class="grow" id="pText" placeholder="New prayer topic">
         <button class="btn btn-primary btn-sm" id="pAdd">Add</button>
       </div>
-      <div class="log">${myP.slice(1).map(x=>`
-        <div class="item"><span class="d">${esc(x.date)}</span>
-        <span class="txt">${esc(x.text||"")}</span>
-        <button class="del" data-col="prayers" data-id="${x.id}">✕</button></div>`).join("") || (myP.length<=1?'<span class="stat">Older topics will appear here.</span>':"")}
-      </div>
+      ${answered.length ? `<div class="log" style="margin-top:6px">
+        <div class="stat" style="margin:6px 0 2px">Answered</div>
+        ${answered.map(x => `<div class="item">
+          <span class="d">${esc(x.date)}</span>
+          <span class="txt"><s>${esc(x.text||"")}</s>${x.answerNote?`<br><span class="ans-note">↳ ${esc(x.answerNote)}</span>`:""}
+            <span class="ans-tag">answered ${esc(x.answeredOn||"")}</span></span>
+          <button class="del" data-col="prayers" data-id="${x.id}">✕</button></div>`).join("")}
+      </div>` : ""}
     </div>
 
     <div class="sec">
@@ -614,6 +815,10 @@ function renderMember(){
     addRec("prayers", { date:$("pDate").value, text:$("pText").value.trim() });
   };
   $("sAdd").onclick = () => addRec("servicePrayers", { date:$("sDate").value, note:$("sNote").value.trim() });
+  $("mBody").querySelectorAll(".p-answer").forEach(b => b.onclick = async () => {
+    await markAnswered(b.dataset.id);
+    setTimeout(renderMember, 400);
+  });
   $("mBody").querySelectorAll(".del").forEach(b => b.onclick = async () => {
     if (!confirm("Delete this record?")) return;
     await db.collection(b.dataset.col).doc(b.dataset.id).delete();
