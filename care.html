@@ -82,7 +82,14 @@ tr.sec-row td .cnt{font-family:var(--font-body);font-weight:400;font-size:12.5px
 
 /* attendance */
 .att-head{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
-.att-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px}
+.att-grid{display:block}
+.att-group{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:12px;overflow:hidden}
+.att-group-head{display:flex;align-items:center;gap:8px;padding:8px 14px;background:var(--paper);border-bottom:1px solid var(--line);flex-wrap:wrap}
+.att-group-head b{font-family:var(--font-serif);font-size:15px;color:var(--pine-deep)}
+.att-group-head .att-count{font-size:12.5px;color:var(--ink-soft);margin-right:auto}
+.att-group-head .btn{padding:2px 10px;font-size:12.5px}
+.att-group-head .btn:disabled{opacity:.45;cursor:default}
+.att-group-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;padding:10px 12px}
 .att-item{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;cursor:pointer;user-select:none}
 .att-item input{width:auto;accent-color:var(--pine)}
 .att-item.on{background:#EAF1EC;border-color:var(--pine)}
@@ -519,22 +526,58 @@ function renderAttGrid(){
   if (!d) return;
   const fd = $("attDept").value;
   const shown = members.filter(m => !fd || (m.department||"") === fd);
-  $("attGrid").innerHTML = shown.map(m => `
-    <label class="att-item ${attPresent.has(m.id)?"on":""}">
-      <input type="checkbox" data-id="${m.id}" ${attPresent.has(m.id)?"checked":""}>
-      <span>${esc(fullName(m))}</span>
-    </label>`).join("");
+
+  // one block per department, so a whole group can be checked at once
+  const order = [...optionsFor("department"), ""];
+  const groups = order
+    .map(dep => ({ dep, list: shown.filter(m => (m.department||"") === dep) }))
+    .filter(g => g.list.length);
+
+  $("attGrid").innerHTML = groups.map(g => `
+    <section class="att-group" data-dep="${esc(g.dep)}">
+      <div class="att-group-head">
+        <b>${esc(g.dep || "No department")}</b>
+        <span class="att-count">0 / ${g.list.length}</span>
+        <button class="btn btn-sm att-all" type="button">Check all</button>
+        <button class="btn btn-sm att-none" type="button">Clear</button>
+      </div>
+      <div class="att-group-items">
+        ${g.list.map(m => `
+          <label class="att-item ${attPresent.has(m.id)?"on":""}">
+            <input type="checkbox" data-id="${m.id}" ${attPresent.has(m.id)?"checked":""}>
+            <span>${esc(fullName(m))}</span>
+          </label>`).join("")}
+      </div>
+    </section>`).join("") || `<p class="att-sum">No members to show.</p>`;
+
   const sum = () => {
+    $("attGrid").querySelectorAll(".att-group").forEach(sec => {
+      const boxes = [...sec.querySelectorAll("input")];
+      const on = boxes.filter(b => b.checked).length;
+      sec.querySelector(".att-count").textContent = `${on} / ${boxes.length}`;
+      sec.querySelector(".att-all").disabled  = on === boxes.length;
+      sec.querySelector(".att-none").disabled = on === 0;
+    });
     const inView = shown.filter(m => attPresent.has(m.id)).length;
     $("attSum").textContent = fd
       ? `${inView} / ${shown.length} present in ${fd} · ${attPresent.size} total`
       : `${attPresent.size} / ${members.length} present`;
   };
+  const setBox = (cb, on) => {
+    on ? attPresent.add(cb.dataset.id) : attPresent.delete(cb.dataset.id);
+    cb.checked = on;
+    cb.closest(".att-item").classList.toggle("on", on);
+  };
   sum();
+
   $("attGrid").querySelectorAll("input").forEach(cb => cb.onchange = () => {
-    cb.checked ? attPresent.add(cb.dataset.id) : attPresent.delete(cb.dataset.id);
-    cb.closest(".att-item").classList.toggle("on", cb.checked);
-    sum();
+    setBox(cb, cb.checked); sum();
+  });
+  $("attGrid").querySelectorAll(".att-all").forEach(b => b.onclick = () => {
+    b.closest(".att-group").querySelectorAll("input").forEach(cb => setBox(cb, true)); sum();
+  });
+  $("attGrid").querySelectorAll(".att-none").forEach(b => b.onclick = () => {
+    b.closest(".att-group").querySelectorAll("input").forEach(cb => setBox(cb, false)); sum();
   });
 }
 $("attDept").addEventListener("change", renderAttGrid);
