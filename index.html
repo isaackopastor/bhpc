@@ -120,6 +120,12 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 .fam-chip{display:inline-flex;align-items:center;gap:6px;background:var(--gold-soft);border:1px solid #E2D5AE;border-radius:20px;padding:5px 12px;font-size:13.5px;margin:0 6px 6px 0;cursor:pointer}
 .fam-chip b{color:var(--pine-deep)}
 .fam-chip span{color:var(--ink-soft);font-size:12px}
+.ph-strip{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px}
+.ph-item{margin:0;flex:0 0 auto;width:92px;text-align:center}
+.ph-item img{width:92px;height:92px;object-fit:cover;border-radius:8px;border:1px solid var(--line);cursor:zoom-in;display:block}
+.ph-item figcaption{font-size:11.5px;color:var(--ink-soft);margin-top:3px}
+.ph-acts{display:flex;gap:3px;justify-content:center;margin-top:3px}
+.ph-acts .btn{padding:1px 6px;font-size:11px}
 .guess-box h3{color:var(--ink-soft)}
 .fam-chip.guess{background:#F3F0E7;border:1px dashed var(--line)}
 .guess-add{border:none;background:var(--pine);color:#fff;border-radius:50%;width:19px;height:19px;line-height:1;font-size:13px;padding:0;margin-left:2px;cursor:pointer}
@@ -524,6 +530,7 @@ const ID_DOMAIN = "@bhpc.member";
 const toEmail = v => v.includes("@") ? v : v + ID_DOMAIN;
 const toDisplay = v => v.endsWith(ID_DOMAIN) ? v.slice(0, -ID_DOMAIN.length) : v;
 
+const todayISO = () => new Date().toLocaleDateString("sv-SE");   // YYYY-MM-DD, local time
 const REL_TYPES = ["Spouse","Parent","Child","Sibling","Grandparent","Grandchild","Other"];
 const REL_KO = { Spouse:"배우자", Parent:"부모", Child:"자녀", Sibling:"형제자매",
                  Grandparent:"조부모", Grandchild:"손자녀", Other:"기타" };
@@ -859,6 +866,7 @@ function openDetail(id){
         <div class="detail-list">${rows}</div>
       </div>
     </div>
+    <div id="photoHistory"></div>
     ${fam?`<div class="fam-box"><h3>Family</h3>${fam}</div>`:""}
     ${guessHTML}
     ${m.notes?`<div class="memo-box">${esc(m.notes)}</div>`:""}`;
@@ -869,6 +877,7 @@ function openDetail(id){
     $("editOpenBtn").onclick = () => { $("detailOverlay").hidden = true; openEdit(id); };
     $("delBtn").onclick = () => deleteMember(id);
   }
+  loadPhotoHistory(m.id);
   $("detailBody").querySelectorAll(".fam-chip").forEach(c => c.onclick = e => {
     if (e.target.closest(".guess-add")) return;
     openDetail(c.dataset.id);
@@ -880,6 +889,62 @@ function openDetail(id){
     setTimeout(() => openDetail(m.id), 400);
   });
   $("detailOverlay").hidden = false;
+}
+
+/* Past photos live in their own collection so the member list stays light —
+   they are only fetched when a detail screen is opened. */
+async function loadPhotoHistory(memberId){
+  const box = $("photoHistory");
+  if (!box) return;
+  box.innerHTML = "";
+  let docs = [];
+  try {
+    const snap = await db.collection("photos").where("memberId", "==", memberId).get();
+    docs = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a,b) => (b.archivedOn || "").localeCompare(a.archivedOn || ""));
+  } catch(e) { return; }
+  if (!docs.length) return;
+  if ($("detailOverlay").hidden) return;
+
+  box.innerHTML = `<div class="fam-box">
+    <h3>${lang==="ko" ? "이전 사진" : "Past photos"} <span class="hint" style="font-weight:400">${docs.length}</span></h3>
+    <div class="ph-strip">${docs.map(d => `
+      <figure class="ph-item" data-id="${d.id}">
+        <img src="${d.photo}" alt="">
+        <figcaption>${esc(d.archivedOn || "")}</figcaption>
+        ${myRole === "admin" ? `<div class="ph-acts">
+          <button class="btn btn-sm ph-restore" data-id="${d.id}">${lang==="ko"?"현재 사진으로":"Make current"}</button>
+          <button class="btn btn-sm btn-danger ph-del" data-id="${d.id}">✕</button>
+        </div>` : ""}
+      </figure>`).join("")}
+    </div></div>`;
+
+  box.querySelectorAll(".ph-item img").forEach(img => img.onclick = () => window.open(img.src, "_blank"));
+  box.querySelectorAll(".ph-restore").forEach(b => b.onclick = async () => {
+    const d = docs.find(x => x.id === b.dataset.id);
+    const cur = (members.find(x => x.id === memberId) || {}).photo || "";
+    b.disabled = true;
+    try {
+      const batch = db.batch();
+      batch.update(db.collection("members").doc(memberId), { photo: d.photo });
+      batch.delete(db.collection("photos").doc(d.id));
+      if (cur) batch.set(db.collection("photos").doc(), {
+        memberId, photo: cur, archivedOn: todayISO(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      await batch.commit();
+      toast(lang==="ko" ? "현재 사진으로 바꿨습니다" : "Photo restored");
+      setTimeout(() => openDetail(memberId), 500);
+    } catch(e) { alert(lang==="ko" ? "저장에 실패했습니다." : "Could not save."); b.disabled = false; }
+  });
+  box.querySelectorAll(".ph-del").forEach(b => b.onclick = async () => {
+    if (!confirm(lang==="ko" ? "이 사진을 영구히 삭제할까요?" : "Delete this photo permanently?")) return;
+    b.disabled = true;
+    try {
+      await db.collection("photos").doc(b.dataset.id).delete();
+      setTimeout(() => openDetail(memberId), 400);
+    } catch(e) { alert("Could not delete."); b.disabled = false; }
+  });
 }
 
 /* Writes a relation on both members, the same way saving the form does. */
@@ -1088,6 +1153,11 @@ $("saveBtn").onclick = async () => {
   data.family = family;
   data.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
 
+  /* When the picture changes, the one being replaced is kept in the photos
+     collection so it can be viewed (or restored) later. */
+  const prevPhoto = editingId ? ((members.find(x => x.id === editingId) || {}).photo || "") : "";
+  const archivePrev = prevPhoto && prevPhoto !== editPhotoData;
+
   $("saveBtn").disabled = true;
   try {
     const batch = db.batch();
@@ -1100,6 +1170,13 @@ $("saveBtn").onclick = async () => {
       batch.set(myRef, { ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     }
     // apply inverse relation to the other person
+    if (archivePrev) {
+      batch.set(db.collection("photos").doc(), {
+        memberId: myRef.id, photo: prevPhoto,
+        archivedOn: todayISO(),
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+    }
     const oldFam = editingId ? ((members.find(x => x.id === editingId) || {}).family || []) : [];
     const oldIds = new Set(oldFam.map(f => f.id));
     const newIds = new Set(family.map(f => f.id));
@@ -1132,6 +1209,11 @@ async function deleteMember(id){
   try {
     const batch = db.batch();
     batch.delete(db.collection("members").doc(id));
+    // archived photos belong to this member, so they go too
+    try {
+      const snap = await db.collection("photos").where("memberId", "==", id).get();
+      snap.docs.forEach(d => batch.delete(d.ref));
+    } catch(e) {}
     for (const other of members) {
       if ((other.family || []).some(f => f.id === id)) {
         batch.update(db.collection("members").doc(other.id),
