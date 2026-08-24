@@ -560,7 +560,7 @@ function inferredRelations(m){
 }
 const REL_INVERSE = {"Spouse":"Spouse","Parent":"Child","Child":"Parent","Sibling":"Sibling","Grandparent":"Grandchild","Grandchild":"Grandparent","Other":"Other"};
 
-const fullName = m => [m.firstName, m.lastName].filter(Boolean).join(" ") || m.name || "(No name)";
+const fullName = m => [m.lastName, m.firstName].filter(Boolean).join(" ") || m.name || "(No name)";
 const initial  = m => ((m.firstName || m.lastName || m.name || "?").trim()[0] || "?").toUpperCase();
 
 let db, auth, myRole = "viewer", members = [], unsubMembers = null, editingId = null;
@@ -775,7 +775,7 @@ function cardValue(m, f){
   return optLabel(f, v);
 }
 function memberCardHTML(m){
-  const nameLF = [m.lastName, m.firstName].filter(Boolean).join(" ") || fullName(m);
+  const nameLF = fullName(m);
   const knField = MEMBER_FIELDS.find(f => f.key === "koreanName" && f.card);
   const kn = (knField && m.koreanName) ? ` <span class="kname">${esc(m.koreanName)}</span>` : "";
   const tField = MEMBER_FIELDS.find(f => f.key === "title" && f.card);
