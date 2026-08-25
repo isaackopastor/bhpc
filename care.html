@@ -315,7 +315,7 @@ const CONTACT_TYPES = ["Call","Text","KakaoTalk","Visit","In person","Other"];
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const fullName = m => [m.firstName, m.lastName].filter(Boolean).join(" ") || "(No name)";
+const fullName = m => [m.lastName, m.firstName].filter(Boolean).join(" ") || "(No name)";
 const todayISO = () => new Date().toLocaleDateString("sv-SE");   // YYYY-MM-DD local
 function lastSunday(from){
   const d = from ? new Date(from + "T12:00:00") : new Date();
