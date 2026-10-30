@@ -262,6 +262,7 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       <option value="bday" data-i18n="sortBday">By birthday (month/day)</option>
     </select>
     <select id="groupSel"><option value="">No grouping</option></select>
+    <button class="btn btn-sm" id="bdayListBtn" data-i18n="bdayList">🎂 Birthday list</button>
     <button class="btn btn-sm" id="deptMgrBtn" hidden data-i18n="departments">⚙ Departments</button>
     <span class="count-note" id="countNote"></span>
   </div>
@@ -353,6 +354,28 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
 </div>
 
 <!-- ===================== Print options ===================== -->
+<!-- ===================== Birthday list (plain text) ===================== -->
+<div class="overlay" id="bdayOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:480px">
+    <div class="modal-head">
+      <h2 id="bdayTitle">Birthday list</h2>
+      <button class="x-btn" data-close="bdayOverlay" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <select id="bdayMonthSel" style="width:auto"></select>
+        <label class="check-inline"><input type="checkbox" id="bdayShowYear" checked><span id="bdayYearLbl">Include year</span></label>
+      </div>
+      <textarea id="bdayText" rows="12" readonly style="width:100%;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13.5px;line-height:1.7"></textarea>
+      <div class="hint" id="bdayCount"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" data-close="bdayOverlay" data-i18n="done">Done</button>
+      <button class="btn btn-primary" id="bdayCopyBtn">📋 Copy</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="printOverlay" hidden>
   <div class="modal" role="dialog" aria-modal="true" style="max-width:480px">
     <div class="modal-head">
@@ -1315,7 +1338,7 @@ const UI = {
     username:"아이디", password:"비밀번호", enterUser:"아이디 입력",
     signIn:"로그인", appTitle:"교인 명부", print:"🖨 인쇄", addMember:"＋ 교인 추가",
     import:"⬆ 일괄 등록", fields:"⚙ 항목 설정", accounts:"👤 계정 관리", logout:"로그아웃",
-    departments:"⚙ 부서 관리", search:"이름 · 전화번호 · 주소 검색",
+    departments:"⚙ 부서 관리", bdayList:"🎂 생일 명단", search:"이름 · 전화번호 · 주소 검색",
     allBirthdays:"생일 전체", m1:"1월", m2:"2월", m3:"3월", m4:"4월", m5:"5월", m6:"6월",
     m7:"7월", m8:"8월", m9:"9월", m10:"10월", m11:"11월", m12:"12월",
     sortLast:"성(姓) 순", sortFirst:"이름 순", sortBday:"생일 순 (월/일)",
@@ -1336,7 +1359,7 @@ const UI = {
     username:"Username", password:"Password", enterUser:"Enter username",
     signIn:"Sign in", appTitle:"Member Directory", print:"🖨 Print", addMember:"＋ Add Member",
     import:"⬆ Import", fields:"⚙ Fields", accounts:"👤 Accounts", logout:"Log out",
-    departments:"⚙ Departments", search:"Search name, phone, or address",
+    departments:"⚙ Departments", bdayList:"🎂 Birthday list", search:"Search name, phone, or address",
     allBirthdays:"All birthdays", m1:"January", m2:"February", m3:"March", m4:"April", m5:"May",
     m6:"June", m7:"July", m8:"August", m9:"September", m10:"October", m11:"November", m12:"December",
     sortLast:"By last name", sortFirst:"By first name", sortBday:"By birthday (month/day)",
@@ -1375,6 +1398,67 @@ $("langBtn").onclick = () => {
   applyLang();
 };
 applyLang();
+
+/* ---------- birthday list (plain text, for copy & paste) ---------- */
+$("bdayListBtn").onclick = () => {
+  const now = new Date();
+  $("bdayMonthSel").innerHTML = Array.from({length:12}, (_,i) =>
+    `<option value="${i+1}"${i+1===now.getMonth()+1?" selected":""}>${esc(t("m"+(i+1)))}</option>`).join("");
+  buildBdayText();
+  $("bdayOverlay").hidden = false;
+};
+["bdayMonthSel","bdayShowYear"].forEach(id => $(id).addEventListener("change", buildBdayText));
+
+function buildBdayText(){
+  const mon = parseInt($("bdayMonthSel").value, 10);
+  const withYear = $("bdayShowYear").checked;
+  const list = visibleMembers()
+    .filter(m => bdayMonth(m) === mon)
+    .sort((a,b) => bdayMD(a).localeCompare(bdayMD(b)) ||
+                   fullName(a).localeCompare(fullName(b), "en"));
+
+  // names padded to a common width so the dates line up once pasted.
+  // Korean and other CJK characters take two columns in a monospace font.
+  const colWidth = str => [...str].reduce((w,ch) =>
+    w + (/[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/.test(ch) ? 2 : 1), 0);
+  const names = list.map(m => fullName(m));
+  const width = names.reduce((w,n) => Math.max(w, colWidth(n)), 0);
+  const pad = n => n + " ".repeat(Math.max(0, width - colWidth(n)));
+
+  const lines = list.map((m, i) => {
+    const b = m.birthday;                                   // YYYY-MM-DD
+    const date = withYear
+      ? `${b.slice(0,4)}-${b.slice(5,7)}-${b.slice(8,10)}`
+      : `${parseInt(b.slice(5,7),10)}/${parseInt(b.slice(8,10),10)}`;
+    return `${pad(names[i])}  ${date}`;
+  });
+
+  $("bdayText").value = lines.join("\n");
+  $("bdayCount").textContent = lang === "ko"
+    ? `${t("m"+mon)} 생일 ${list.length}명`
+    : `${list.length} birthday${list.length===1?"":"s"} in ${t("m"+mon)}`;
+  $("bdayTitle").textContent  = lang === "ko" ? "생일 명단" : "Birthday list";
+  $("bdayYearLbl").textContent = lang === "ko" ? "연도 포함" : "Include year";
+  $("bdayCopyBtn").textContent = lang === "ko" ? "📋 복사" : "📋 Copy";
+  $("bdayCopyBtn").disabled = !lines.length;
+}
+
+$("bdayCopyBtn").onclick = async () => {
+  const text = $("bdayText").value;
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch(e) {
+    // fallback for browsers that block the clipboard API
+    $("bdayText").removeAttribute("readonly");
+    $("bdayText").select();
+    document.execCommand("copy");
+    $("bdayText").setAttribute("readonly", "");
+  }
+  toast(lang === "ko" ? "복사했습니다" : "Copied");
+};
+
+/* ---------- department quick manager ---------- */
 $("deptMgrBtn").onclick = () => { renderDeptMgr(); $("dOverlay").hidden = false; };
 function deptListNow(){
   const f = MEMBER_FIELDS.find(x => x.key === "department");
