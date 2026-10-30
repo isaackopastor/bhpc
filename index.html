@@ -11,6 +11,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <!-- Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -237,7 +239,8 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
       <h1 id="churchTitle"><span data-i18n="appTitle">Member Directory</span><small id="churchNameEn">BEAUTIFUL HILL PRESBYTERIAN CHURCH</small></h1>
       <div class="spacer"></div>
       <button class="btn btn-sm" id="langBtn">한국어</button>
-      <button class="btn btn-sm" id="printOpenBtn" data-i18n="print">🖨 Print</button>
+      <button class="btn btn-sm" id="printOpenBtn" data-i18n="print">📕 요람 PDF</button>
+      <button class="btn btn-sm" id="simplePrintBtn" data-i18n="simplePrint">🖨 목록 인쇄</button>
       <button class="btn btn-sm btn-gold" id="addBtn" hidden data-i18n="addMember">＋ Add Member</button>
       <button class="btn btn-sm" id="importBtn" hidden data-i18n="import">⬆ Import</button>
       <button class="btn btn-sm" id="fieldsBtn" hidden data-i18n="fields">⚙ Fields</button>
@@ -494,6 +497,20 @@ main#grid{max-width:1180px;margin:16px auto 60px;padding:0 18px;display:grid;gri
     </div>
   </div>
 </div>
+
+<!-- ===================== Booklet PDF ===================== -->
+<div class="overlay" id="pdfOverlay" hidden>
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:360px">
+    <div class="modal-body" style="text-align:center;padding:28px 24px">
+      <div style="font-family:var(--font-serif);font-size:18px;color:var(--pine-deep);margin-bottom:10px" id="pdfTitle">요람 만드는 중</div>
+      <div style="height:6px;background:#EFECE3;border-radius:3px;overflow:hidden;margin-bottom:10px">
+        <div id="pdfBar" style="height:100%;width:0;background:var(--gold);transition:width .25s"></div>
+      </div>
+      <div class="hint" id="pdfStep"></div>
+    </div>
+  </div>
+</div>
+<div id="pdfStage" style="position:fixed;left:-20000px;top:0;width:528px"></div>
 
 <div id="printArea"></div>
 <script>
@@ -1336,7 +1353,7 @@ $("createAccBtn").onclick = async () => {
 const UI = {
   ko: {
     username:"아이디", password:"비밀번호", enterUser:"아이디 입력",
-    signIn:"로그인", appTitle:"교인 명부", print:"🖨 인쇄", addMember:"＋ 교인 추가",
+    signIn:"로그인", appTitle:"교인 명부", print:"📕 요람 PDF", simplePrint:"🖨 목록 인쇄", addMember:"＋ 교인 추가",
     import:"⬆ 일괄 등록", fields:"⚙ 항목 설정", accounts:"👤 계정 관리", logout:"로그아웃",
     departments:"⚙ 부서 관리", bdayList:"🎂 생일 명단", search:"이름 · 전화번호 · 주소 검색",
     allBirthdays:"생일 전체", m1:"1월", m2:"2월", m3:"3월", m4:"4월", m5:"5월", m6:"6월",
@@ -1357,7 +1374,7 @@ const UI = {
   },
   en: {
     username:"Username", password:"Password", enterUser:"Enter username",
-    signIn:"Sign in", appTitle:"Member Directory", print:"🖨 Print", addMember:"＋ Add Member",
+    signIn:"Sign in", appTitle:"Member Directory", print:"📕 Booklet PDF", simplePrint:"🖨 Plain print", addMember:"＋ Add Member",
     import:"⬆ Import", fields:"⚙ Fields", accounts:"👤 Accounts", logout:"Log out",
     departments:"⚙ Departments", bdayList:"🎂 Birthday list", search:"Search name, phone, or address",
     allBirthdays:"All birthdays", m1:"January", m2:"February", m3:"March", m4:"April", m5:"May",
@@ -1836,7 +1853,170 @@ $("doImportBtn").onclick = async () => {
 };
 
 /* ---------- print ---------- */
-$("printOpenBtn").onclick = () => {
+/* =====================================================================
+   BOOKLET PDF — letter sheets printed two-up, folded once through the
+   middle. Pages are imposed saddle-stitch style so the stack reads in
+   order once folded. Nine member cards fill each folded page (3x3).
+   Rendered through html2canvas so Korean text uses the page's own fonts.
+   ===================================================================== */
+const PAGE_W = 528, PAGE_H = 816;        // half-letter at 96dpi (5.5 x 8.5in)
+const PER_PAGE = 9;
+
+function pdfProgress(step, pct){
+  $("pdfStep").textContent = step;
+  $("pdfBar").style.width = Math.round(pct) + "%";
+}
+function longDate(){
+  const d = new Date();
+  return lang === "ko"
+    ? `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`
+    : d.toLocaleDateString("en-US", { year:"numeric", month:"long", day:"numeric" });
+}
+
+/* A page is a fixed-size div; html2canvas turns each one into an image. */
+function pageShell(inner){
+  return `<div style="width:${PAGE_W}px;height:${PAGE_H}px;background:#fff;
+    box-sizing:border-box;position:relative;overflow:hidden;
+    font-family:'Pretendard',-apple-system,'Malgun Gothic',sans-serif;color:#26332C">${inner}</div>`;
+}
+function coverPageHTML(count, scope){
+  return pageShell(`
+    <div style="position:absolute;inset:34px;border:1px solid #DDD6C7;border-radius:4px"></div>
+    <div style="position:absolute;inset:42px;border:1px solid #A8842A"></div>
+    <div style="position:absolute;inset:46px;border:1px solid #A8842A"></div>
+    <div style="position:absolute;left:0;right:0;top:232px;text-align:center;padding:0 60px">
+      <div style="font-family:'Gowun Batang',serif;font-size:40px;font-weight:700;color:#1E362D;line-height:1.3">아름다운 동산교회</div>
+      <div style="height:3px;border-top:1px solid #A8842A;border-bottom:1px solid #A8842A;width:90px;margin:24px auto"></div>
+      <div style="font-family:'Gowun Batang',serif;font-size:27px;color:#2C4A3E;letter-spacing:.22em">교 회 요 람</div>
+      <div style="font-size:12px;color:#5B6A61;letter-spacing:.26em;margin-top:12px">BEAUTIFUL HILL PRESBYTERIAN CHURCH</div>
+    </div>
+    <div style="position:absolute;left:0;right:0;bottom:92px;text-align:center">
+      ${scope ? `<div style="font-size:14px;color:#2C4A3E;margin-bottom:8px">${esc(scope)}</div>` : ""}
+      <div style="font-size:13.5px;color:#5B6A61">${lang === "ko"
+        ? `${esc(longDate())} 기준 · 총 ${count}명`
+        : `As of ${esc(longDate())} · ${count} members`}</div>
+    </div>`);
+}
+function cardHTML(m){
+  const lines = MEMBER_FIELDS
+    .filter(f => f.card && !["lastName","firstName","koreanName","title"].includes(f.key))
+    .map(f => cardValue(m, f)).filter(Boolean).slice(0, 3);
+  const kn = m.koreanName ? `<span style="font-size:11.5px;font-weight:400;color:#5B6A61"> ${esc(m.koreanName)}</span>` : "";
+  const ti = m.title ? `<span style="font-size:10px;color:#A8842A;border:1px solid #A8842A;border-radius:8px;padding:0 5px;margin-left:3px;white-space:nowrap">${esc(m.title)}</span>` : "";
+  const photo = m.photo
+    ? `<div style="width:100%;height:104px;border-radius:3px;background-image:url('${m.photo}');
+         background-size:cover;background-position:center 30%;background-repeat:no-repeat"></div>`
+    : `<div style="width:100%;height:104px;border-radius:3px;background:#EFE6CE;color:#A8842A;
+         display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:700;
+         font-family:'Gowun Batang',serif">${esc(initial(m))}</div>`;
+  return `<div style="border:1px solid #DDD6C7;border-top:3px solid #2C4A3E;border-radius:4px;
+      padding:7px;box-sizing:border-box;height:100%;overflow:hidden;background:#fff">
+    ${photo}
+    <div style="font-family:'Gowun Batang',serif;font-size:14px;font-weight:700;color:#1E362D;
+      margin-top:6px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(fullName(m))}${kn}${ti}</div>
+    ${lines.map(v => `<div style="font-size:11px;color:#5B6A61;margin-top:2px;line-height:1.35;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(v)}</div>`).join("")}
+  </div>`;
+}
+function cardsPageHTML(group, pageNo, heading){
+  const cells = group.map(m => `<div>${cardHTML(m)}</div>`).join("")
+    + Array.from({length: PER_PAGE - group.length}, () => "<div></div>").join("");
+  return pageShell(`
+    <div style="position:absolute;left:38px;right:38px;top:28px;display:flex;align-items:baseline;
+      border-bottom:1px solid #DDD6C7;padding-bottom:5px">
+      <div style="font-family:'Gowun Batang',serif;font-size:13px;color:#2C4A3E">${esc(heading)}</div>
+      <div style="margin-left:auto;font-size:10.5px;color:#9A937F;letter-spacing:.12em">아름다운 동산교회</div>
+    </div>
+    <div style="position:absolute;left:38px;right:38px;top:64px;bottom:52px;
+      display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:9px">${cells}</div>
+    <div style="position:absolute;left:0;right:0;bottom:26px;text-align:center;font-size:10.5px;color:#9A937F">${pageNo}</div>`);
+}
+
+async function renderPage(html){
+  const stage = $("pdfStage");
+  stage.innerHTML = html;
+  const el = stage.firstElementChild;
+  // the serif/sans webfonts must be ready or the clone falls back to a system font
+  if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch(e) {} }
+  const canvas = await html2canvas(el, {
+    scale: 2.5, backgroundColor: "#FFFFFF", logging: false, useCORS: true, imageTimeout: 20000
+  });
+  const data = canvas.toDataURL("image/jpeg", 0.9);
+  canvas.width = canvas.height = 0;       // release the bitmap
+  stage.innerHTML = "";
+  return data;
+}
+
+async function buildBookletPDF(){
+  if (!window.jspdf || !window.html2canvas) {
+    alert(lang === "ko" ? "PDF 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인해 주세요."
+                        : "Could not load the PDF libraries. Please check your connection.");
+    return;
+  }
+  const list = currentList();
+  if (!list.length) {
+    alert(lang === "ko" ? "인쇄할 교인이 없습니다." : "There are no members to print.");
+    return;
+  }
+
+  // the cover notes any filter that is currently narrowing the directory
+  const scopeBits = MEMBER_FIELDS.filter(f => f.filter && filterState[f.key])
+    .map(f => optLabel(f, filterState[f.key]));
+  const mon = $("monthFilter").value;
+  if (mon) scopeBits.push(t("m" + mon) + (lang === "ko" ? " 생일" : " birthdays"));
+  const scope = scopeBits.join(" · ");
+
+  const groups = [];
+  for (let i = 0; i < list.length; i += PER_PAGE) groups.push(list.slice(i, i + PER_PAGE));
+
+  const pages = [coverPageHTML(list.length, scope)];
+  const heading = scope || (lang === "ko" ? "교인 명부" : "Member directory");
+  groups.forEach((g, i) => pages.push(cardsPageHTML(g, i + 1, heading)));
+  while (pages.length % 4) pages.push(pageShell(""));        // saddle stitch needs a multiple of 4
+
+  $("pdfTitle").textContent = lang === "ko" ? "요람 만드는 중" : "Building the booklet";
+  $("pdfOverlay").hidden = false;
+  await new Promise(r => setTimeout(r, 60));
+
+  try {
+    const imgs = [];
+    for (let i = 0; i < pages.length; i++) {
+      pdfProgress(lang === "ko" ? `${i + 1} / ${pages.length} 쪽` : `page ${i + 1} of ${pages.length}`,
+                  (i / pages.length) * 92);
+      imgs.push(await renderPage(pages[i]));
+    }
+
+    pdfProgress(lang === "ko" ? "PDF로 묶는 중" : "Assembling the PDF", 95);
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: "pt", format: "letter", orientation: "landscape" });
+    const HW = 396, HH = 612;                                 // each half of the sheet
+    const N = pages.length;
+    let first = true;
+    const place = (left, right) => {
+      if (!first) doc.addPage();
+      first = false;
+      doc.addImage(imgs[left - 1],  "JPEG", 0,  0, HW, HH);
+      doc.addImage(imgs[right - 1], "JPEG", HW, 0, HW, HH);
+    };
+    for (let s = 0; s < N / 4; s++) {
+      place(N - 2 * s, 2 * s + 1);                            // sheet front
+      place(2 * s + 2, N - 2 * s - 1);                        // sheet back
+    }
+
+    const stamp = new Date().toLocaleDateString("sv-SE");
+    doc.save(`BHPC_교회요람_${stamp}.pdf`);
+    pdfProgress(lang === "ko" ? "완료" : "Done", 100);
+    setTimeout(() => { $("pdfOverlay").hidden = true; }, 700);
+    toast(lang === "ko" ? "PDF를 저장했습니다" : "PDF saved");
+  } catch(e) {
+    $("pdfOverlay").hidden = true;
+    alert(lang === "ko" ? "PDF를 만들지 못했습니다. 다시 시도해 주세요." : "Could not build the PDF. Please try again.");
+  }
+}
+
+$("printOpenBtn").onclick = () => buildBookletPDF();
+
+$("simplePrintBtn").onclick = () => {
   // build Include checkboxes from MEMBER_FIELDS (name & notes excluded)
   $("pIncludes").innerHTML = MEMBER_FIELDS
     .filter(f => !["firstName","lastName","notes"].includes(f.key))
